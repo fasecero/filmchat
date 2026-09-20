@@ -1,0 +1,48 @@
+Inspect my environment first.
+Set up the development toolchain required by the project specification.
+Do not modify the application architecture or implement product features.
+Make a list of what actions are necessary to install/configure for:
+
+React Native + Expo + TypeScript
+Firebase / Firestore
+Firebase Emulator Suite
+Jest + React Native Testing Library
+Maestro for E2E testing
+ESLint + Prettier
+Git hooks if genuinely useful
+
+Prefer project-local dependencies and npx where appropriate.
+
+Do not install or modify anithing yet. Just show me the list of actions
+
+
+
+-------------------------------------
+
+ Still required, in order:
+
+  1. Validate the repository tooling:
+      - Run type check, lint, Prettier check, unit test, and Functions TypeScript build.
+      - Fix only configuration/test-scaffold issues that emerge; no product features.
+
+  2. Install a Java 17 JDK:
+      - Current machine has only Java 11 runtime and no javac.
+      - The attempted system installation stopped because sudo requires your interactive password.
+      - Preferred resolution: install Java 17 system-wide with your password, or install a project/user-local JDK 17.
+
+  3. Install Android tooling:
+      - Android Studio or Android command-line tools.
+      - Android SDK Platform Tools (adb), Emulator, Build Tools, API 35 platform, and Google APIs API 35 system image.
+      - Configure ANDROID_HOME and PATH.
+      - This also requires accepting the Android SDK licenses.
+
+  4. Create and verify the Android emulator:
+      - Create the planned Pixel-class API 35 AVD.
+      - Confirm virtualization/KVM is available and the emulator can boot.
+      - Run Expo on that emulator with npm run android.
+
+  5. Validate Firebase Emulator Suite:
+      - First run downloads Firebase emulator binaries to the user cache.
+      - Start Auth, Firestore, Functions, and Emulator UI with npm run emulators.
+      - Run the Firestore rules test with npm run test:rules.
+

@@ -162,18 +162,18 @@ Groups (list)
 
 Minimum screens/views:
 
-| View | Required content/actions |
-| --- | --- |
-| Welcome/authentication | Sign in, sign up, reset-password entry point. |
-| Groups | Active groups ordered by latest activity; create action; empty state. |
-| Create group | Group name, validation, Create. |
-| Group chat | Header (name, share/settings), chronological messages, composer, movie action, Chat/Movies switch. |
-| Movie search | Search field, catalog result list, loading/empty/error states. |
-| Recommendation composer | Selected movie summary, optional note, Send recommendation. May be a modal/sheet. |
-| Group movies | Distinct persistent movies, recommendation count, rating summary, newest/recently-recommended sort. |
-| Group-movie detail | Metadata, aggregate, recommendation history, member watch-note editor, and compact member review/platform feed. |
-| Invite join/unavailable | Group name and Join, or safe invalid-link explanation. |
-| Group settings | Share invite and Leave group only. |
+| View                    | Required content/actions                                                                                        |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Welcome/authentication  | Sign in, sign up, reset-password entry point.                                                                   |
+| Groups                  | Active groups ordered by latest activity; create action; empty state.                                           |
+| Create group            | Group name, validation, Create.                                                                                 |
+| Group chat              | Header (name, share/settings), chronological messages, composer, movie action, Chat/Movies switch.              |
+| Movie search            | Search field, catalog result list, loading/empty/error states.                                                  |
+| Recommendation composer | Selected movie summary, optional note, Send recommendation. May be a modal/sheet.                               |
+| Group movies            | Distinct persistent movies, recommendation count, rating summary, newest/recently-recommended sort.             |
+| Group-movie detail      | Metadata, aggregate, recommendation history, member watch-note editor, and compact member review/platform feed. |
+| Invite join/unavailable | Group name and Join, or safe invalid-link explanation.                                                          |
+| Group settings          | Share invite and Leave group only.                                                                              |
 
 ### Familiar chat interaction conventions
 
@@ -206,12 +206,12 @@ Use these conventions unless they conflict with the durable-recommendation mecha
 
 These are distinct entities because they have different lifetimes and scopes:
 
-| Entity | Scope and purpose |
-| --- | --- |
-| **Movie** | A normalized external-catalog identity and a small metadata snapshot: e.g. TMDb movie ID, title, year, poster path. It is not social content. |
-| **Recommendation post** | A specific act of sending a movie into one group's chat: author, time, optional note, and its message ID. Several can exist for the same movie/group. |
-| **Group movie** | The durable, unique association of one catalog movie with one group. It aggregates recommendation history/count, rating summary, and list ordering. |
-| **User watch note** | One member's optional 1–5-star rating, short review, and watched-on platform/medium for one group movie. It is group-scoped: it does not carry to another group. |
+| Entity                  | Scope and purpose                                                                                                                                                |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Movie**               | A normalized external-catalog identity and a small metadata snapshot: e.g. TMDb movie ID, title, year, poster path. It is not social content.                    |
+| **Recommendation post** | A specific act of sending a movie into one group's chat: author, time, optional note, and its message ID. Several can exist for the same movie/group.            |
+| **Group movie**         | The durable, unique association of one catalog movie with one group. It aggregates recommendation history/count, rating summary, and list ordering.              |
+| **User watch note**     | One member's optional 1–5-star rating, short review, and watched-on platform/medium for one group movie. It is group-scoped: it does not carry to another group. |
 
 Use TMDb's numeric movie ID as `externalMovieId`. A group movie is unique by `(groupId, provider, externalMovieId)`; use a deterministic, safely encoded document ID such as `tmdb_<id>` beneath the group. A global movie cache is optional and must never be the source of group authorization or state.
 
@@ -304,16 +304,16 @@ Required indexes include: messages by `createdAt`; groupMovies by `lastRecommend
 
 Firebase Authentication is mandatory for all app data access. Enforce the following in Firestore Security Rules and duplicate critical checks in Cloud Functions:
 
-| Resource/action | Authorization |
-| --- | --- |
-| Read group, messages, group movies, recommendation history, watch notes | Active group member only. |
-| Create text message | Active group member; only own author ID; only `text` type; validate length/schema. |
-| Create movie recommendation or alter group-movie aggregate/history | Cloud Function/service account only. |
-| Read/write own watch note | Active group member; all mutations go through the watch-note function so rating aggregates stay correct. |
-| Create group | Authenticated user via function or a tightly validated client write plus membership creation. Prefer function for atomic setup. |
-| Join group | Redeem-invite Cloud Function only. |
-| Leave group | Active member can mark only their own membership `left`; preferably a function also removes their group reference. |
-| Read invite records | Service account only. |
+| Resource/action                                                         | Authorization                                                                                                                   |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Read group, messages, group movies, recommendation history, watch notes | Active group member only.                                                                                                       |
+| Create text message                                                     | Active group member; only own author ID; only `text` type; validate length/schema.                                              |
+| Create movie recommendation or alter group-movie aggregate/history      | Cloud Function/service account only.                                                                                            |
+| Read/write own watch note                                               | Active group member; all mutations go through the watch-note function so rating aggregates stay correct.                        |
+| Create group                                                            | Authenticated user via function or a tightly validated client write plus membership creation. Prefer function for atomic setup. |
+| Join group                                                              | Redeem-invite Cloud Function only.                                                                                              |
+| Leave group                                                             | Active member can mark only their own membership `left`; preferably a function also removes their group reference.              |
+| Read invite records                                                     | Service account only.                                                                                                           |
 
 Never expose movie provider keys in a mobile bundle. Never rely on UI hiding for privacy. Validate maximum lengths, enumerated message types, numeric rating bounds, review/platform bounds, and immutable author identity server-side. Do not store users' emails in group-visible documents.
 
@@ -333,21 +333,21 @@ Do not ingest full cast, streaming availability, trailers, genres, or a local fu
 
 ## 11. Edge cases and required handling
 
-| Situation | Required behavior |
-| --- | --- |
-| Same movie recommended repeatedly | One group movie; many chat/history posts; atomic count/list update. |
-| Two members recommend same movie simultaneously | Transaction retries produce one group movie and two distinct recommendation posts; count becomes two. |
-| Duplicate tap/network retry | Idempotency key returns the original outcome; no duplicate message/watch note. |
-| Member leaves and rejoins | Prior content remains; membership is reactivated; user regains access and their prior watch note remains unless product later chooses otherwise. |
-| Invalid/expired/disabled invite | Safe unavailable screen; no protected details exposed. |
-| Invite used after group soft deletion | Reject as unavailable. |
-| Deleted/disabled user | Preserve author snapshot on historic content; prohibit access/writes. A deletion workflow must remove or restrict the auth account separately from this MVP. |
-| Deleted group | Soft-delete and deny all member access; hide it from group lists; retain data only according to the future retention policy. |
-| Simultaneous text messages | Server timestamp ordering plus document-ID tie-break; neither message is overwritten. |
-| Rating/review/platform changed or removed | Exactly one watch-note document per `(group movie, user)`; only numeric-rating changes affect the aggregate, atomically. |
-| Movie search/API failure | Preserve query; show retry/error; user cannot send an unverified catalog movie. |
-| Missing/changed movie metadata or poster | Render cached title/year and placeholder poster; never break a chat row. |
-| Device offline | Firestore may show cached content/pending text; clearly keep sends pending until acknowledged. Movie search/recommendation and invite redemption require network. |
+| Situation                                       | Required behavior                                                                                                                                                 |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Same movie recommended repeatedly               | One group movie; many chat/history posts; atomic count/list update.                                                                                               |
+| Two members recommend same movie simultaneously | Transaction retries produce one group movie and two distinct recommendation posts; count becomes two.                                                             |
+| Duplicate tap/network retry                     | Idempotency key returns the original outcome; no duplicate message/watch note.                                                                                    |
+| Member leaves and rejoins                       | Prior content remains; membership is reactivated; user regains access and their prior watch note remains unless product later chooses otherwise.                  |
+| Invalid/expired/disabled invite                 | Safe unavailable screen; no protected details exposed.                                                                                                            |
+| Invite used after group soft deletion           | Reject as unavailable.                                                                                                                                            |
+| Deleted/disabled user                           | Preserve author snapshot on historic content; prohibit access/writes. A deletion workflow must remove or restrict the auth account separately from this MVP.      |
+| Deleted group                                   | Soft-delete and deny all member access; hide it from group lists; retain data only according to the future retention policy.                                      |
+| Simultaneous text messages                      | Server timestamp ordering plus document-ID tie-break; neither message is overwritten.                                                                             |
+| Rating/review/platform changed or removed       | Exactly one watch-note document per `(group movie, user)`; only numeric-rating changes affect the aggregate, atomically.                                          |
+| Movie search/API failure                        | Preserve query; show retry/error; user cannot send an unverified catalog movie.                                                                                   |
+| Missing/changed movie metadata or poster        | Render cached title/year and placeholder poster; never break a chat row.                                                                                          |
+| Device offline                                  | Firestore may show cached content/pending text; clearly keep sends pending until acknowledged. Movie search/recommendation and invite redemption require network. |
 
 ## 12. Non-functional requirements
 
@@ -413,17 +413,17 @@ Do not build any of the following in this MVP:
 
 ## 16. Open questions and proposed defaults
 
-| Decision needed | Why it matters | Proposed MVP default |
-| --- | --- | --- |
-| Authentication methods | Changes onboarding and security surface. | Email/password only; add Apple/Google only after validating sign-up friction. |
-| Invite revocation/expiry | A reusable link can be forwarded indefinitely. | No expiry/revocation UI; active reusable link, with data model status/expiry ready for later. |
-| Who can invite | Affects privacy expectations. | Every active member can share the one group link. |
-| Owner departure | A group needs continuity rules later. | Permit departure; no privileged owner operations exist, so no transfer needed. |
-| Watch-note visibility | Individual ratings, reviews, and watched-on platforms can be socially sensitive. | Show active members' named watch notes in the group-movie detail, including any rating they chose to add; show only the aggregate in list rows and chat. |
-| Recommendations after leaving | Determines whether history is personal or group-owned. | History and watch notes remain group-owned and reappear on rejoin. |
-| Group size limit | Affects costs/query constraints and the product's intimacy. | Enforce no hard UI limit initially; document intended small-group use and revisit before public launch. |
-| Movie provider/legal requirements | TMDb rules can change. | Validate current terms/attribution during implementation; isolate provider adapter so it can be replaced. |
-| Data retention/account deletion | Required before public launch in many jurisdictions. | Treat as launch-policy work; MVP preserves group history and has no self-service deletion UI. |
+| Decision needed                   | Why it matters                                                                   | Proposed MVP default                                                                                                                                     |
+| --------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Authentication methods            | Changes onboarding and security surface.                                         | Email/password only; add Apple/Google only after validating sign-up friction.                                                                            |
+| Invite revocation/expiry          | A reusable link can be forwarded indefinitely.                                   | No expiry/revocation UI; active reusable link, with data model status/expiry ready for later.                                                            |
+| Who can invite                    | Affects privacy expectations.                                                    | Every active member can share the one group link.                                                                                                        |
+| Owner departure                   | A group needs continuity rules later.                                            | Permit departure; no privileged owner operations exist, so no transfer needed.                                                                           |
+| Watch-note visibility             | Individual ratings, reviews, and watched-on platforms can be socially sensitive. | Show active members' named watch notes in the group-movie detail, including any rating they chose to add; show only the aggregate in list rows and chat. |
+| Recommendations after leaving     | Determines whether history is personal or group-owned.                           | History and watch notes remain group-owned and reappear on rejoin.                                                                                       |
+| Group size limit                  | Affects costs/query constraints and the product's intimacy.                      | Enforce no hard UI limit initially; document intended small-group use and revisit before public launch.                                                  |
+| Movie provider/legal requirements | TMDb rules can change.                                                           | Validate current terms/attribution during implementation; isolate provider adapter so it can be replaced.                                                |
+| Data retention/account deletion   | Required before public launch in many jurisdictions.                             | Treat as launch-policy work; MVP preserves group history and has no self-service deletion UI.                                                            |
 
 ## 17. Acceptance criteria
 

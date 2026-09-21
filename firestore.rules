@@ -2,7 +2,6 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Product-specific authorization rules are added with the data model.
     match /{document=**} {
       allow read, write: if false;
     }

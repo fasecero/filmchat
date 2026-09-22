@@ -6,15 +6,18 @@
     "@react-native-async-storage/async-storage": "^3.1.1",
     "expo": "~57.0.24",
     "expo-status-bar": "~57.0.1",
+    "expo-router": "~4.2.0",
     "firebase": "^12.19.0",
-    "jest-expo": "~57.0.5",
     "react": "19.2.3",
-    "react-native": "0.86.3"
+    "react-native": "0.86.3",
+    "react-native-safe-area-context": "^4.10.1",
+    "react-native-screens": "^3.29.0"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.2",
     "@testing-library/react-native": "^13.3.3",
     "@types/jest": "^30.0.0",
+    "@types/node": "^24.10.1",
     "@types/react": "~19.2.2",
     "eslint": "^9.39.5",
     "eslint-config-expo": "^57.0.2",
@@ -36,7 +39,7 @@
     "test": "npm run test:unit && npm run test:rules",
     "test:unit": "jest --runInBand --testPathIgnorePatterns=tests/firestore.rules.test.ts",
     "test:rules": "firebase emulators:exec --project demo-filmchat --only firestore \"npm run test:rules:raw\"",
-    "test:rules:raw": "jest --runInBand tests/firestore.rules.test.ts",
+    "test:rules:raw": "jest --config jest.rules.config.cjs --runInBand tests/firestore.rules.test.ts",
     "emulators": "firebase emulators:start --project demo-filmchat --only auth,firestore,functions",
     "emulators:export": "firebase emulators:start --project demo-filmchat --only auth,firestore,functions --export-on-exit=.firebase/emulator-data"
   },

@@ -1,11 +1,21 @@
-import { render, screen } from '@testing-library/react-native';
-
+import { render, screen, waitFor } from '@testing-library/react-native';
 import App from '../App';
 
+jest.mock('../src/services/auth', () => ({
+  subscribeToAuth: (listener: (user: null) => void) => {
+    listener(null);
+    return () => undefined;
+  },
+}));
+jest.mock('../src/services/groups', () => ({
+  listUserGroups: jest.fn().mockResolvedValue([]),
+  createGroup: jest.fn(),
+}));
+
 describe('application shell', () => {
-  it('renders', () => {
+  it('renders the welcome screen for signed-out users', async () => {
     render(<App />);
 
-    expect(screen.getByText('Open up App.tsx to start working on your app!')).toBeOnTheScreen();
+    await waitFor(() => expect(screen.getByText('Create an account')).toBeOnTheScreen());
   });
 });

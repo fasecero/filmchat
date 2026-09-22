@@ -5,9 +5,9 @@ import {
   getReactNativePersistence,
   initializeAuth,
 } from 'firebase/auth';
-import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
+import { createAsyncStorage } from '@react-native-async-storage/async-storage';
 
 const firebaseConfig = {
   apiKey: 'demo-api-key',
@@ -19,9 +19,10 @@ const app = getApps().length === 0
   ? initializeApp(firebaseConfig)
   : getApps()[0];
 
-export const auth = initializeAuth(app, {
-  persistence: getReactNativePersistence(ReactNativeAsyncStorage),
-});
+const appStorage = createAsyncStorage('filmchat');
+const persistence = getReactNativePersistence(appStorage);
+
+export const auth = initializeAuth(app, { persistence });
 
 export const db = getFirestore(app);
 export const functions = getFunctions(app);

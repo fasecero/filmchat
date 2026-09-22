@@ -162,3 +162,6 @@ Sep 21, 2026 12:31:59 AM io.gapi.emulators.netty.HttpVersionRoutingHandler chann
 INFO: Detected non-HTTP/2 connection.
 Sep 21, 2026 12:31:59 AM com.google.cloud.datastore.emulator.firestore.webchannel.FirestoreV1WebChannelAdapter$FirestoreWriteHandler onClose
 INFO: channel closed
+*** shutting down gRPC server since JVM is shutting down
+*** server shut down
+260921 01:18:47.050:I 1 [main] [com.google.cloud.datastore.emulator.firestore.websocket.WebSocketServer.stop:79] Stopping WebSocket server...

@@ -58,3 +58,23 @@ it('creates an owner group atomically and hides it from another user', async () 
   })).rejects.toThrow();
   await expect(owner.doc('invites/invite-1').get()).rejects.toThrow();
 });
+
+it('allows active members to create text messages and rejects invalid authors', async () => {
+  const owner = testEnvironment.authenticatedContext('owner', { email: 'owner@example.com' }).firestore();
+  const stranger = testEnvironment.authenticatedContext('stranger', { email: 'stranger@example.com' }).firestore();
+  const message = {
+    type: 'text',
+    authorId: 'owner',
+    authorDisplayNameSnapshot: 'Owner',
+    text: 'Hello from the group',
+    createdAt: new Date(),
+    clientRequestId: 'request-1',
+  };
+
+  await expect(owner.doc('groups/group-1/messages/text_request-1').set(message)).resolves.toBeUndefined();
+  await expect(stranger.doc('groups/group-1/messages/text_request-2').set({ ...message, authorId: 'stranger' })).rejects.toThrow();
+  await expect(owner.doc('groups/group-1/messages/text-invalid').set({ ...message, type: 'movie_recommendation' })).rejects.toThrow();
+  await expect(owner.doc('groups/group-1/messages/text-empty').set({ ...message, text: '   ' })).rejects.toThrow();
+  await expect(owner.doc('groups/group-1/messages/text_request-1').update({ text: 'Changed' })).rejects.toThrow();
+  await expect(owner.doc('groups/group-1/messages/text_request-1').get()).resolves.toBeDefined();
+});

@@ -41,6 +41,28 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /groups/{groupId}/messages/{messageId} {
+      allow read: if isActiveMember(groupId);
+      allow create: if isActiveMember(groupId)
+        && request.resource.data.keys().hasOnly([
+          'type', 'authorId', 'authorDisplayNameSnapshot', 'text', 'createdAt', 'clientRequestId'
+        ])
+        && request.resource.data.type == 'text'
+        && request.resource.data.authorId == request.auth.uid
+        && request.resource.data.authorDisplayNameSnapshot is string
+        && request.resource.data.authorDisplayNameSnapshot.size() > 0
+        && request.resource.data.authorDisplayNameSnapshot.size() <= 120
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.text.size() <= 2000
+        && request.resource.data.text.matches('.*\\S.*')
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.clientRequestId is string
+        && request.resource.data.clientRequestId.size() > 0
+        && request.resource.data.clientRequestId.size() <= 120;
+      allow update, delete: if false;
+    }
+
     match /users/{userId}/groups/{groupId} {
       allow read: if isUser(userId);
       allow create: if isUser(userId)

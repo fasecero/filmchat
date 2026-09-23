@@ -18,6 +18,13 @@ jest.mock('../src/services/invites', () => ({
   leaveGroup: jest.fn(),
   buildInviteLink: jest.fn(),
 }));
+jest.mock('../src/services/messages', () => ({
+  loadOlderMessages: jest.fn(),
+  subscribeToLatestMessages: jest.fn(),
+  sendTextMessage: jest.fn(),
+  normalizeMessageText: (value: string) => value.trim(),
+  createClientRequestId: jest.fn(),
+}));
 jest.mock('../src/services/pendingInvite', () => ({
   getPendingInvite: jest.fn().mockResolvedValue(null),
   savePendingInvite: jest.fn(),

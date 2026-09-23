@@ -47,7 +47,7 @@ export default function App() {
   }
   if (pendingInvite) return <InvitePreviewScreen invite={pendingInvite} onCancel={() => { void clearPendingInvite(); setPendingInvite(null); }} onJoined={(groupId, groupName) => { void clearPendingInvite(); setPendingInvite(null); setGroup({ id: groupId, name: groupName, ownerId: user.uid }); setScreen('group'); }} />;
   if (screen === 'create') return <CreateGroupScreen userId={user.uid} displayName={user.displayName || user.email || 'FilmChat member'} onBack={() => setScreen('groups')} onCreated={(created: Group, _invite: InviteReference) => { setGroup(created); setScreen('group'); }} />;
-  if (screen === 'group' && group) return <GroupDetailScreen group={group} onBack={() => setScreen('groups')} onLeft={() => { setGroup(null); setScreen('groups'); }} />;
+  if (screen === 'group' && group) return <GroupDetailScreen group={group} userId={user.uid} displayName={user.displayName || user.email || 'FilmChat member'} onBack={() => setScreen('groups')} onLeft={() => { setGroup(null); setScreen('groups'); }} />;
   return <GroupsListScreen userId={user.uid} onCreate={() => setScreen('create')} onOpen={(selected) => { setGroup(selected); setScreen('group'); }} />;
 }
 

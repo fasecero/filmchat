@@ -37,9 +37,7 @@ service cloud.firestore {
         && request.resource.data.status == 'active'
         && request.resource.data.role == 'owner'
         && getAfter(/databases/$(database)/documents/groups/$(groupId)).data.ownerId == userId;
-      allow update: if isUser(userId)
-        && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['status', 'leftAt', 'updatedAt']);
+      allow update: if false;
       allow delete: if false;
     }
 
@@ -47,8 +45,13 @@ service cloud.firestore {
       allow read: if isUser(userId);
       allow create: if isUser(userId)
         && request.resource.data.groupId == groupId
-        && request.resource.data.status == 'active';
-      allow update, delete: if isUser(userId);
+        && request.resource.data.status == 'active'
+        && getAfter(/databases/$(database)/documents/groups/$(groupId)/members/$(userId)).data.status == 'active';
+      allow update, delete: if false;
+    }
+
+    match /invites/{inviteId} {
+      allow read, write: if false;
     }
 
     function isSignedIn() {

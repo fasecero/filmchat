@@ -1,14 +1,13 @@
 import {
-  collection,
   doc,
   getDoc,
   getDocs,
   orderBy,
   query,
-  serverTimestamp,
-  writeBatch,
+  collection,
 } from 'firebase/firestore';
-import { db } from '../firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '../firebase';
 
 export type Group = {
   id: string;
@@ -20,42 +19,24 @@ export type Group = {
   lastActivityPreview?: string;
 };
 
+type CreateGroupResponse = {
+  inviteId: string;
+  token: string;
+  groupId: string;
+  name: string;
+  ownerId: string;
+};
+
 export const createGroup = async (userId: string, displayName: string, name: string) => {
   const trimmedName = name.trim();
   if (!trimmedName || trimmedName.length > 60) {
     throw new Error('Group name must be between 1 and 60 characters.');
   }
-
-  const groupRef = doc(collection(db, 'groups'));
-  const memberRef = doc(db, 'groups', groupRef.id, 'members', userId);
-  const userGroupRef = doc(db, 'users', userId, 'groups', groupRef.id);
-  const batch = writeBatch(db);
-  const timestamp = serverTimestamp();
-
-  batch.set(groupRef, {
-    name: trimmedName,
-    ownerId: userId,
-    createdAt: timestamp,
-    updatedAt: timestamp,
-    lastActivityAt: timestamp,
-    lastActivityPreview: '',
-  });
-  batch.set(memberRef, {
-    userId,
-    displayNameSnapshot: displayName,
-    role: 'owner',
-    status: 'active',
-    joinedAt: timestamp,
-    updatedAt: timestamp,
-  });
-  batch.set(userGroupRef, {
-    groupId: groupRef.id,
-    name: trimmedName,
-    status: 'active',
-    updatedAt: timestamp,
-  });
-  await batch.commit();
-  return { id: groupRef.id, name: trimmedName, ownerId: userId } satisfies Group;
+  void userId;
+  void displayName;
+  const callable = httpsCallable<{ name: string }, CreateGroupResponse>(functions, 'createGroup');
+  const response = await callable({ name: trimmedName });
+  return { ...response.data, id: response.data.groupId };
 };
 
 export const listUserGroups = async (userId: string): Promise<Group[]> => {

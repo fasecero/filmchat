@@ -11,6 +11,18 @@ jest.mock('../src/services/groups', () => ({
   listUserGroups: jest.fn().mockResolvedValue([]),
   createGroup: jest.fn(),
 }));
+jest.mock('../src/services/invites', () => ({
+  previewInvite: jest.fn(),
+  redeemInvite: jest.fn(),
+  createInvite: jest.fn(),
+  leaveGroup: jest.fn(),
+  buildInviteLink: jest.fn(),
+}));
+jest.mock('../src/services/pendingInvite', () => ({
+  getPendingInvite: jest.fn().mockResolvedValue(null),
+  savePendingInvite: jest.fn(),
+  clearPendingInvite: jest.fn(),
+}));
 
 describe('application shell', () => {
   it('renders the welcome screen for signed-out users', async () => {

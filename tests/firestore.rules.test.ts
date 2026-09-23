@@ -49,4 +49,12 @@ it('creates an owner group atomically and hides it from another user', async () 
 
   await expect(owner.doc('groups/group-1').get()).resolves.toBeDefined();
   await expect(stranger.doc('groups/group-1').get()).rejects.toThrow();
+  await expect(owner.doc('groups/group-1/members/owner').update({ status: 'left' })).rejects.toThrow();
+  await expect(owner.doc('groups/group-1/members/stranger').set({
+    userId: 'stranger', role: 'member', status: 'active',
+  })).rejects.toThrow();
+  await expect(owner.doc('invites/invite-1').set({
+    groupId: 'group-1', tokenHash: 'secret', status: 'active',
+  })).rejects.toThrow();
+  await expect(owner.doc('invites/invite-1').get()).rejects.toThrow();
 });

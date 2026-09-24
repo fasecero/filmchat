@@ -47,6 +47,17 @@ The conversation remains transient, but the group-movie record provides a shared
    npm start
    ```
 
+   For a physical device on the same LAN, replace `192.168.1.105` with the
+   development computer's LAN address:
+   ```bash
+   EXPO_PUBLIC_FIREBASE_EMULATOR_HOST=192.168.1.105 npx expo start --lan
+   ```
+
+   The Android virtual device can use its host-machine alias:
+   ```bash
+   EXPO_PUBLIC_FIREBASE_EMULATOR_HOST=10.0.2.2 npx expo start
+   ```
+
 4. For Android testing, run the app in an Android emulator or on a connected device:
    ```bash
    npm run android
@@ -60,12 +71,16 @@ The conversation remains transient, but the group-movie record provides a shared
 ### Project-specific environment notes
 
 - The app initializes Firebase with a demo project ID in `src/firebase.ts`.
-- Development mode automatically connects to local emulators:
-  - Auth at `localhost:9099`
-  - Firestore at `localhost:8080`
-  - Functions at `localhost:5001`
+- Development mode automatically connects Auth, Firestore, and Functions to
+   the configured local emulator host:
+   - Auth at port `9099`
+   - Firestore at port `8080`
+   - Functions at port `5001`
 - Android emulators connect to the host machine via `10.0.2.2`.
-- Physical devices must connect to the development machine's LAN IP instead of `localhost`.
+- iOS simulators use `127.0.0.1` by default.
+- Physical devices use `EXPO_PUBLIC_FIREBASE_EMULATOR_HOST` and must connect to
+   the development machine's LAN IP instead of `localhost`.
+- The Firebase emulators listen on `0.0.0.0` so LAN clients can reach them.
 - No remote Firebase project or Firebase web app setup is required for normal local development.
 
 ### Available Scripts
@@ -93,4 +108,10 @@ The conversation remains transient, but the group-movie record provides a shared
 
 ### Emulator UI
 
-- The Firebase Emulator UI is available at `http://localhost:4000` when the emulator suite is running.
+- The Firebase Emulator UI is available at `http://localhost:4000` on the
+   development computer, or at `http://192.168.1.105:4000` from a device on the
+   same LAN.
+
+The development computer and physical device must be on the same LAN, and the
+firewall must allow ports `4000`, `5001`, `8080`, and `9099`. Guest Wi-Fi or
+client isolation can prevent device-to-computer connections.

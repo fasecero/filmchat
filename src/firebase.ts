@@ -27,9 +27,8 @@ export const db = getFirestore(app);
 export const functions = getFunctions(app);
 
 if (__DEV__) {
-  const emulatorHost = Platform.OS === 'android'
-    ? '10.0.2.2'
-    : '127.0.0.1';
+  const emulatorHost = process.env.EXPO_PUBLIC_FIREBASE_EMULATOR_HOST
+    || (Platform.OS === 'android' ? '10.0.2.2' : '127.0.0.1');
 
   connectAuthEmulator(
     auth,

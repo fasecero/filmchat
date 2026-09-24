@@ -25,6 +25,10 @@ jest.mock('../src/services/messages', () => ({
   normalizeMessageText: (value: string) => value.trim(),
   createClientRequestId: jest.fn(),
 }));
+jest.mock('../src/services/movies', () => ({
+  searchMovies: jest.fn(),
+  recommendMovie: jest.fn(),
+}));
 jest.mock('../src/services/pendingInvite', () => ({
   getPendingInvite: jest.fn().mockResolvedValue(null),
   savePendingInvite: jest.fn(),

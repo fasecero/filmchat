@@ -63,6 +63,16 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    match /groups/{groupId}/groupMovies/{groupMovieId} {
+      allow read: if isActiveMember(groupId);
+      allow write: if false;
+
+      match /recommendations/{recommendationId} {
+        allow read: if isActiveMember(groupId);
+        allow write: if false;
+      }
+    }
+
     match /users/{userId}/groups/{groupId} {
       allow read: if isUser(userId);
       allow create: if isUser(userId)

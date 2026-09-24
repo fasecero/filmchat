@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
+import { getTmdbMovie, searchTmdb, type MovieCatalogResult } from './tmdb';
 
 if (getApps().length === 0) {
 	initializeApp();
@@ -24,6 +25,24 @@ type GroupRecord = {
 	ownerId: string;
 	deletedAt?: FirebaseFirestore.Timestamp | null;
 };
+
+const maxRecommendationNoteLength = 500;
+
+function requireBoundedString(value: unknown, field: string, maxLength: number) {
+	const result = requireString(value, field);
+	if (result.length > maxLength) {
+		throw new HttpsError('invalid-argument', `${field} must be ${maxLength} characters or fewer.`);
+	}
+	return result;
+}
+
+function requireClientRequestId(value: unknown) {
+	return requireBoundedString(value, 'Client request ID', 120);
+}
+
+function groupMovieId(movie: MovieCatalogResult) {
+	return `tmdb_${movie.externalMovieId}`;
+}
 
 function requireAuth(request: { auth?: { uid: string } | null }) {
 	if (!request.auth) {
@@ -210,4 +229,98 @@ export const leaveGroup = onCall(async (request) => {
 	});
 
 	return { groupId, status: 'left' };
+});
+
+export const searchMovies = onCall(async (request) => {
+	requireAuth(request);
+	const query = requireBoundedString(request.data?.query, 'Search query', 100);
+	if (query.length < 2) {
+		throw new HttpsError('invalid-argument', 'Search query must be at least 2 characters.');
+	}
+	return { results: await searchTmdb(query) };
+});
+
+export const recommendMovie = onCall(async (request) => {
+	const uid = requireAuth(request);
+	const groupId = requireString(request.data?.groupId, 'Group ID');
+	const externalMovieId = requireBoundedString(request.data?.externalMovieId, 'Movie ID', 30);
+	const clientRequestId = requireClientRequestId(request.data?.clientRequestId);
+	const note = typeof request.data?.note === 'string' ? request.data.note.trim() : '';
+	if (note.length > maxRecommendationNoteLength) {
+		throw new HttpsError('invalid-argument', 'Recommendation note must be 500 characters or fewer.');
+	}
+
+	const groupRef = firestore.collection('groups').doc(groupId);
+	const memberRef = groupRef.collection('members').doc(uid);
+	const [groupSnapshot, memberSnapshot, movie] = await Promise.all([
+		groupRef.get(),
+		memberRef.get(),
+		getTmdbMovie(externalMovieId),
+	]);
+	if (!groupSnapshot.exists || !memberSnapshot.exists || memberSnapshot.data()?.status !== 'active') {
+		throw new HttpsError('permission-denied', 'Active group membership is required.');
+	}
+
+	const userSnapshot = await firestore.collection('users').doc(uid).get();
+	const displayName = (userSnapshot.data() as { displayName?: string } | undefined)?.displayName ?? '';
+	const messageId = `movie_${clientRequestId}`;
+	const messageRef = groupRef.collection('messages').doc(messageId);
+	const groupMovieRef = groupRef.collection('groupMovies').doc(groupMovieId(movie));
+	const historyRef = groupMovieRef.collection('recommendations').doc(messageId);
+	const timestamp = FieldValue.serverTimestamp();
+
+	await firestore.runTransaction(async (transaction) => {
+		const existing = await transaction.get(messageRef);
+		if (existing.exists) return;
+		const existingMovie = await transaction.get(groupMovieRef);
+		const movieData = {
+			provider: movie.provider,
+			externalMovieId: movie.externalMovieId,
+			title: movie.title,
+			releaseYear: movie.releaseYear,
+			posterPath: movie.posterPath,
+			overview: movie.overview,
+		};
+		transaction.create(messageRef, {
+			type: 'movie_recommendation',
+			authorId: uid,
+			authorDisplayNameSnapshot: displayName,
+			text: note || null,
+			createdAt: timestamp,
+			clientRequestId,
+			movie: movieData,
+			groupMovieId: groupMovieId(movie),
+		});
+		transaction.set(groupMovieRef, existingMovie.exists ? {
+			lastRecommendedAt: timestamp,
+			recommendationCount: (existingMovie.data()?.recommendationCount ?? 0) + 1,
+			recommenderIds: Array.from(new Set([...(existingMovie.data()?.recommenderIds ?? []), uid])).slice(0, 100),
+			updatedAt: timestamp,
+		} : {
+			...movieData,
+			firstRecommendedAt: timestamp,
+			lastRecommendedAt: timestamp,
+			firstRecommendationMessageId: messageId,
+			recommendationCount: 1,
+			recommenderIds: [uid],
+			ratingCount: 0,
+			ratingSum: 0,
+			ratingAverage: null,
+			updatedAt: timestamp,
+		});
+		transaction.create(historyRef, {
+			messageId,
+			authorId: uid,
+			authorDisplayNameSnapshot: displayName,
+			note: note || null,
+			createdAt: timestamp,
+		});
+		transaction.update(groupRef, {
+			updatedAt: timestamp,
+			lastActivityAt: timestamp,
+			lastActivityPreview: `Recommended ${movie.title}`.slice(0, 200),
+		});
+	});
+
+	return { messageId, clientRequestId, movie, groupMovieId: groupMovieId(movie), note: note || null };
 });

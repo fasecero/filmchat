@@ -18,6 +18,7 @@ import { db } from '../firebase';
 
 export const MAX_MESSAGE_LENGTH = 2000;
 export const MESSAGE_PAGE_SIZE = 50;
+export const MAX_RECOMMENDATION_NOTE_LENGTH = 500;
 
 export type TextMessage = {
   id: string;
@@ -29,8 +30,31 @@ export type TextMessage = {
   clientRequestId: string;
 };
 
+export type MovieCatalogResult = {
+  provider: 'tmdb';
+  externalMovieId: string;
+  title: string;
+  releaseYear: number | null;
+  posterPath: string | null;
+  overview: string | null;
+};
+
+export type MovieRecommendationMessage = {
+  id: string;
+  type: 'movie_recommendation';
+  authorId: string;
+  authorDisplayNameSnapshot: string;
+  text: string | null;
+  createdAt: Timestamp | null;
+  clientRequestId: string;
+  movie: MovieCatalogResult;
+  groupMovieId: string;
+};
+
+export type Message = TextMessage | MovieRecommendationMessage;
+
 export type MessagePage = {
-  messages: TextMessage[];
+  messages: Message[];
   cursor: QueryDocumentSnapshot<DocumentData> | null;
   hasMore: boolean;
 };
@@ -46,8 +70,28 @@ export const normalizeMessageText = (value: string) => {
 export const createClientRequestId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 const messagesCollection = (groupId: string) => collection(db, 'groups', groupId, 'messages');
 
-const toMessage = (snapshot: QueryDocumentSnapshot<DocumentData>): TextMessage => {
+const toMessage = (snapshot: QueryDocumentSnapshot<DocumentData>): Message => {
   const data = snapshot.data();
+  if (data.type === 'movie_recommendation' && data.movie?.provider === 'tmdb' && typeof data.movie.externalMovieId === 'string' && typeof data.movie.title === 'string' && typeof data.groupMovieId === 'string') {
+    return {
+      id: snapshot.id,
+      type: 'movie_recommendation',
+      authorId: data.authorId as string,
+      authorDisplayNameSnapshot: data.authorDisplayNameSnapshot as string,
+      text: typeof data.text === 'string' ? data.text : null,
+      createdAt: (data.createdAt as Timestamp | undefined) ?? null,
+      clientRequestId: data.clientRequestId as string,
+      movie: {
+        provider: 'tmdb',
+        externalMovieId: data.movie.externalMovieId,
+        title: data.movie.title,
+        releaseYear: typeof data.movie.releaseYear === 'number' ? data.movie.releaseYear : null,
+        posterPath: typeof data.movie.posterPath === 'string' ? data.movie.posterPath : null,
+        overview: typeof data.movie.overview === 'string' ? data.movie.overview : null,
+      },
+      groupMovieId: data.groupMovieId,
+    };
+  }
   return {
     id: snapshot.id,
     type: 'text',
@@ -59,7 +103,7 @@ const toMessage = (snapshot: QueryDocumentSnapshot<DocumentData>): TextMessage =
   };
 };
 
-const sortMessages = (messages: TextMessage[]) => [...messages].sort((left, right) => {
+const sortMessages = (messages: Message[]) => [...messages].sort((left, right) => {
   const leftTime = left.createdAt?.toMillis() ?? Number.MAX_SAFE_INTEGER;
   const rightTime = right.createdAt?.toMillis() ?? Number.MAX_SAFE_INTEGER;
   return leftTime - rightTime || left.id.localeCompare(right.id);
@@ -67,7 +111,7 @@ const sortMessages = (messages: TextMessage[]) => [...messages].sort((left, righ
 
 export const subscribeToLatestMessages = (
   groupId: string,
-  onMessages: (messages: TextMessage[]) => void,
+  onMessages: (messages: Message[]) => void,
   onError: (error: Error) => void,
 ): Unsubscribe => onSnapshot(
   query(messagesCollection(groupId), orderBy('createdAt', 'desc'), limit(MESSAGE_PAGE_SIZE)),

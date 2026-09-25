@@ -27,6 +27,10 @@ type GroupRecord = {
 };
 
 const maxRecommendationNoteLength = 500;
+const maxWatchNoteReviewLength = 1000;
+const maxWatchNotePlatformLength = 80;
+const minWatchNoteRating = 1;
+const maxWatchNoteRating = 5;
 
 function requireBoundedString(value: unknown, field: string, maxLength: number) {
 	const result = requireString(value, field);
@@ -333,4 +337,88 @@ export const recommendMovie = onCall(async (request) => {
 	});
 
 	return { messageId, clientRequestId, movie, groupMovieId: groupMovieId(movie), note: note || null };
+});
+
+export const saveWatchNote = onCall(async (request) => {
+	const uid = requireAuth(request);
+	const groupId = requireString(request.data?.groupId, 'Group ID');
+	const groupMovieIdValue = requireString(request.data?.groupMovieId, 'Group movie ID');
+	const remove = request.data?.remove === true;
+	const rawRating = request.data?.rating;
+	const rating = rawRating === null || rawRating === undefined || rawRating === '' ? null : rawRating;
+	if (rating !== null && (typeof rating !== 'number' || !Number.isInteger(rating) || rating < minWatchNoteRating || rating > maxWatchNoteRating)) {
+		throw new HttpsError('invalid-argument', 'Rating must be an integer from 1 to 5.');
+	}
+	const reviewText = typeof request.data?.reviewText === 'string' ? request.data.reviewText.trim() : '';
+	if (reviewText.length > maxWatchNoteReviewLength) {
+		throw new HttpsError('invalid-argument', `Review must be ${maxWatchNoteReviewLength} characters or fewer.`);
+	}
+	const watchedOn = typeof request.data?.watchedOn === 'string' ? request.data.watchedOn.trim() : '';
+	if (watchedOn.length > maxWatchNotePlatformLength) {
+		throw new HttpsError('invalid-argument', `Platform must be ${maxWatchNotePlatformLength} characters or fewer.`);
+	}
+	if (!remove && rating === null && reviewText.length === 0 && watchedOn.length === 0) {
+		throw new HttpsError('invalid-argument', 'At least one watch-note field is required.');
+	}
+
+	const groupRef = firestore.collection('groups').doc(groupId);
+	const memberRef = groupRef.collection('members').doc(uid);
+	const groupMovieRef = groupRef.collection('groupMovies').doc(groupMovieIdValue);
+	const watchNoteRef = groupMovieRef.collection('watchNotes').doc(uid);
+	const userSnapshot = await firestore.collection('users').doc(uid).get();
+	const displayNameSnapshot = (userSnapshot.data() as { displayName?: string } | undefined)?.displayName ?? '';
+
+	await firestore.runTransaction(async (transaction) => {
+		const [memberSnapshot, movieSnapshot, noteSnapshot] = await Promise.all([
+			transaction.get(memberRef),
+			transaction.get(groupMovieRef),
+			transaction.get(watchNoteRef),
+		]);
+		if (!memberSnapshot.exists || memberSnapshot.data()?.status !== 'active') {
+			throw new HttpsError('permission-denied', 'Active group membership is required.');
+		}
+		if (!movieSnapshot.exists) {
+			throw new HttpsError('not-found', 'The group movie was not found.');
+		}
+
+		const existingRating = noteSnapshot.data()?.rating;
+		const oldRating = typeof existingRating === 'number' ? existingRating : null;
+		const ratingChanged = oldRating !== rating;
+		const currentCount = typeof movieSnapshot.data()?.ratingCount === 'number' ? movieSnapshot.data()?.ratingCount : 0;
+		const currentSum = typeof movieSnapshot.data()?.ratingSum === 'number' ? movieSnapshot.data()?.ratingSum : 0;
+		let nextCount = currentCount;
+		let nextSum = currentSum;
+		if (ratingChanged) {
+			if (oldRating !== null) { nextCount -= 1; nextSum -= oldRating; }
+			if (rating !== null) { nextCount += 1; nextSum += rating; }
+		}
+		nextCount = Math.max(0, nextCount);
+		nextSum = Math.max(0, nextSum);
+		const nextAverage = nextCount > 0 ? Math.round((nextSum / nextCount) * 10) / 10 : null;
+		const timestamp = FieldValue.serverTimestamp();
+
+		if (remove) {
+			if (noteSnapshot.exists) transaction.delete(watchNoteRef);
+		} else {
+			transaction.set(watchNoteRef, {
+				userId: uid,
+				displayNameSnapshot,
+				rating,
+				reviewText: reviewText || null,
+				watchedOn: watchedOn || null,
+				createdAt: noteSnapshot.data()?.createdAt ?? timestamp,
+				updatedAt: timestamp,
+			}, { merge: true });
+		}
+		if (ratingChanged || remove && noteSnapshot.exists) {
+			transaction.update(groupMovieRef, {
+				ratingCount: nextCount,
+				ratingSum: nextSum,
+				ratingAverage: nextAverage,
+				updatedAt: timestamp,
+			});
+		}
+	});
+
+	return { groupId, groupMovieId: groupMovieIdValue, removed: remove };
 });

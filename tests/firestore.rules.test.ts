@@ -99,11 +99,23 @@ it('allows active members to read movie history but denies client movie writes',
       note: 'A classic',
       createdAt: new Date(),
     });
+    await context.firestore().doc('groups/group-1/groupMovies/tmdb_603/watchNotes/owner').set({
+      userId: 'owner',
+      rating: 5,
+      reviewText: 'Still excellent',
+      watchedOn: 'Cinema',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
   });
 
   await expect(owner.doc('groups/group-1/groupMovies/tmdb_603').get()).resolves.toBeDefined();
   await expect(owner.doc('groups/group-1/groupMovies/tmdb_603/recommendations/movie_request-1').get()).resolves.toBeDefined();
   await expect(stranger.doc('groups/group-1/groupMovies/tmdb_603').get()).rejects.toThrow();
+  await expect(owner.doc('groups/group-1/groupMovies/tmdb_603/watchNotes/owner').get()).resolves.toBeDefined();
+  await expect(stranger.doc('groups/group-1/groupMovies/tmdb_603/watchNotes/owner').get()).rejects.toThrow();
+  await expect(owner.doc('groups/group-1/groupMovies/tmdb_603/watchNotes/owner').set({ userId: 'owner', rating: 4 })).rejects.toThrow();
+  await expect(owner.doc('groups/group-1/groupMovies/tmdb_603/watchNotes/stranger').set({ userId: 'stranger', rating: 4 })).rejects.toThrow();
   await expect(owner.doc('groups/group-1/groupMovies/tmdb_603').set(movie)).rejects.toThrow();
   await expect(owner.doc('groups/group-1/groupMovies/tmdb_603/recommendations/movie_request-2').set({
     messageId: 'movie_request-2',

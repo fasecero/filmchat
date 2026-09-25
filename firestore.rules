@@ -71,6 +71,11 @@ service cloud.firestore {
         allow read: if isActiveMember(groupId);
         allow write: if false;
       }
+
+      match /watchNotes/{userId} {
+        allow read: if isActiveMember(groupId);
+        allow write: if false;
+      }
     }
 
     match /users/{userId}/groups/{groupId} {

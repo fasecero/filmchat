@@ -11,7 +11,11 @@ import {
   type Timestamp,
   type Unsubscribe,
 } from 'firebase/firestore';
-import { db } from '../firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '../firebase';
+
+export const MAX_WATCH_NOTE_REVIEW_LENGTH = 1000;
+export const MAX_WATCH_NOTE_PLATFORM_LENGTH = 80;
 
 export type GroupMovie = {
   id: string;
@@ -41,9 +45,21 @@ export type RecommendationHistoryItem = {
   createdAt: Timestamp | null;
 };
 
+export type WatchNote = {
+  id: string;
+  userId: string;
+  displayNameSnapshot: string;
+  rating: number | null;
+  reviewText: string | null;
+  watchedOn: string | null;
+  createdAt: Timestamp | null;
+  updatedAt: Timestamp | null;
+};
+
 const groupMoviesCollection = (groupId: string) => collection(db, 'groups', groupId, 'groupMovies');
 const groupMovieDocument = (groupId: string, groupMovieId: string) => doc(groupMoviesCollection(groupId), groupMovieId);
 const historyCollection = (groupId: string, groupMovieId: string) => collection(groupMovieDocument(groupId, groupMovieId), 'recommendations');
+const watchNotesCollection = (groupId: string, groupMovieId: string) => collection(groupMovieDocument(groupId, groupMovieId), 'watchNotes');
 
 const nullableString = (value: unknown) => typeof value === 'string' ? value : null;
 const timestamp = (value: unknown) => value && typeof value === 'object' && 'toMillis' in value ? value as Timestamp : null;
@@ -85,6 +101,21 @@ const toRecommendationHistory = (snapshot: { id: string; data: () => DocumentDat
   };
 };
 
+const toWatchNote = (snapshot: { id: string; data: () => DocumentData }): WatchNote | null => {
+  const data = snapshot.data();
+  if (typeof data.userId !== 'string') return null;
+  return {
+    id: snapshot.id,
+    userId: data.userId,
+    displayNameSnapshot: typeof data.displayNameSnapshot === 'string' ? data.displayNameSnapshot : 'Member',
+    rating: typeof data.rating === 'number' ? data.rating : null,
+    reviewText: nullableString(data.reviewText),
+    watchedOn: nullableString(data.watchedOn),
+    createdAt: timestamp(data.createdAt),
+    updatedAt: timestamp(data.updatedAt),
+  };
+};
+
 export const subscribeToGroupMovies = (
   groupId: string,
   onMovies: (movies: GroupMovie[]) => void,
@@ -103,4 +134,25 @@ export const loadGroupMovie = async (groupId: string, groupMovieId: string) => {
 export const loadRecommendationHistory = async (groupId: string, groupMovieId: string): Promise<RecommendationHistoryItem[]> => {
   const snapshot = await getDocs(query(historyCollection(groupId, groupMovieId), orderBy('createdAt', 'desc'), limit(100)));
   return snapshot.docs.map(toRecommendationHistory).filter((item): item is RecommendationHistoryItem => item !== null);
+};
+
+export const loadWatchNotes = async (groupId: string, groupMovieId: string): Promise<WatchNote[]> => {
+  const snapshot = await getDocs(query(watchNotesCollection(groupId, groupMovieId), orderBy('updatedAt', 'desc'), limit(100)));
+  return snapshot.docs.map(toWatchNote).filter((item): item is WatchNote => item !== null);
+};
+
+export const saveWatchNote = async (
+  groupId: string,
+  groupMovieId: string,
+  note: { rating: number | null; reviewText: string; watchedOn: string },
+) => {
+  const callable = httpsCallable<typeof note & { groupId: string; groupMovieId: string }, { groupId: string; groupMovieId: string; removed: boolean }>(functions, 'saveWatchNote');
+  const response = await callable({ groupId, groupMovieId, ...note });
+  return response.data;
+};
+
+export const removeWatchNote = async (groupId: string, groupMovieId: string) => {
+  const callable = httpsCallable<{ groupId: string; groupMovieId: string; remove: true }, { groupId: string; groupMovieId: string; removed: boolean }>(functions, 'saveWatchNote');
+  const response = await callable({ groupId, groupMovieId, remove: true });
+  return response.data;
 };

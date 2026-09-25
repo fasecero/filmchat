@@ -168,7 +168,7 @@ export function GroupDetailScreen({ group, userId, displayName, onBack, onLeft }
     { text: 'Cancel', style: 'cancel' },
     { text: 'Leave', style: 'destructive', onPress: async () => { await leaveGroup(group.id); onLeft(); } },
   ]);
-  if (selectedMovieId) return <GroupMovieDetailScreen groupId={group.id} groupMovieId={selectedMovieId} onBack={() => setSelectedMovieId(null)} />;
+  if (selectedMovieId) return <GroupMovieDetailScreen groupId={group.id} groupMovieId={selectedMovieId} userId={userId} onBack={() => setSelectedMovieId(null)} />;
   if (section === 'movies') return <GroupMoviesScreen groupId={group.id} onBack={() => setSection('chat')} onSelect={(movie) => setSelectedMovieId(movie.id)} />;
   return <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
     <View style={styles.header}><Button label="Back" onPress={onBack} secondary /><View style={styles.headerTitle}><Text style={styles.title}>{group.name}</Text><Text style={styles.subtitle}>Private conversation</Text></View><Pressable onPress={() => setSection('movies')}><Text style={styles.headerAction}>Movies</Text></Pressable><Pressable onPress={() => void shareInvite()}><Text style={styles.headerAction}>Share</Text></Pressable></View>

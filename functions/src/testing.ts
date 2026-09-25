@@ -22,3 +22,7 @@ export async function seedGroupMovieForIntegration(groupId: string, groupMovieId
     updatedAt: new Date(),
   });
 }
+
+export async function closeIntegrationFirestore() {
+	await getFirestore().terminate();
+}

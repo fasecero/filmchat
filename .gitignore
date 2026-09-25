@@ -45,3 +45,7 @@ yarn-error.*
 # Firebase Functions build output
 /functions/lib/
 /functions/node_modules/
+
+# Firebase emulator logs
+firebase-debug.log
+firestore-debug.log

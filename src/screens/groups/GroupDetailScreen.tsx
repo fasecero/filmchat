@@ -15,6 +15,8 @@ import {
   type TextMessage,
 } from '../../services/messages';
 import { searchMovies, recommendMovie } from '../../services/movies';
+import { GroupMoviesScreen } from './GroupMoviesScreen';
+import { GroupMovieDetailScreen } from './GroupMovieDetailScreen';
 
 type PendingMessage = Message & { status: 'sending' | 'failed' };
 
@@ -40,6 +42,8 @@ export function GroupDetailScreen({ group, userId, displayName, onBack, onLeft }
   const [movieLoading, setMovieLoading] = useState(false);
   const [movieError, setMovieError] = useState<string | null>(null);
   const [movieSending, setMovieSending] = useState(false);
+  const [section, setSection] = useState<'chat' | 'movies'>('chat');
+  const [selectedMovieId, setSelectedMovieId] = useState<string | null>(null);
   const cursor = useRef<Parameters<typeof loadOlderMessages>[1]>(null);
   const listRef = useRef<FlatList<Message | PendingMessage>>(null);
   const nearBottomRef = useRef(true);
@@ -164,8 +168,10 @@ export function GroupDetailScreen({ group, userId, displayName, onBack, onLeft }
     { text: 'Cancel', style: 'cancel' },
     { text: 'Leave', style: 'destructive', onPress: async () => { await leaveGroup(group.id); onLeft(); } },
   ]);
+  if (selectedMovieId) return <GroupMovieDetailScreen groupId={group.id} groupMovieId={selectedMovieId} onBack={() => setSelectedMovieId(null)} />;
+  if (section === 'movies') return <GroupMoviesScreen groupId={group.id} onBack={() => setSection('chat')} onSelect={(movie) => setSelectedMovieId(movie.id)} />;
   return <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
-    <View style={styles.header}><Button label="Back" onPress={onBack} secondary /><View style={styles.headerTitle}><Text style={styles.title}>{group.name}</Text><Text style={styles.subtitle}>Private conversation</Text></View><Pressable onPress={() => void shareInvite()}><Text style={styles.headerAction}>Share</Text></Pressable></View>
+    <View style={styles.header}><Button label="Back" onPress={onBack} secondary /><View style={styles.headerTitle}><Text style={styles.title}>{group.name}</Text><Text style={styles.subtitle}>Private conversation</Text></View><Pressable onPress={() => setSection('movies')}><Text style={styles.headerAction}>Movies</Text></Pressable><Pressable onPress={() => void shareInvite()}><Text style={styles.headerAction}>Share</Text></Pressable></View>
     {error ? <Text style={styles.error}>{error}</Text> : null}
     {loading ? <Text style={styles.status}>Loading conversation...</Text> : <FlatList
       ref={listRef}
@@ -180,7 +186,7 @@ export function GroupDetailScreen({ group, userId, displayName, onBack, onLeft }
         if (contentOffset.y < 80) void loadOlder();
       }}
       scrollEventThrottle={100}
-      renderItem={({ item, index }) => <MessageRow message={item} previous={allMessages[index - 1]} currentUserId={userId} onRetry={item.type === 'text' && pending[item.id] ? () => void send(item.clientRequestId, item.text) : undefined} />}
+      renderItem={({ item, index }) => <MessageRow message={item} previous={allMessages[index - 1]} currentUserId={userId} onMoviePress={setSelectedMovieId} onRetry={item.type === 'text' && pending[item.id] ? () => void send(item.clientRequestId, item.text) : undefined} />}
       ListEmptyComponent={<Text style={styles.status}>No messages yet. Start the conversation.</Text>}
     />}
     {hasNewMessages ? <Pressable style={styles.newMessages} onPress={() => { scrollToBottom(); setHasNewMessages(false); }}><Text style={styles.newMessagesText}>New messages</Text></Pressable> : null}
@@ -189,11 +195,11 @@ export function GroupDetailScreen({ group, userId, displayName, onBack, onLeft }
   </KeyboardAvoidingView>;
 }
 
-function MessageRow({ message, previous, currentUserId, onRetry }: { message: Message | PendingMessage; previous?: Message | PendingMessage; currentUserId: string; onRetry?: () => void }) {
+function MessageRow({ message, previous, currentUserId, onMoviePress, onRetry }: { message: Message | PendingMessage; previous?: Message | PendingMessage; currentUserId: string; onMoviePress: (groupMovieId: string) => void; onRetry?: () => void }) {
   const outgoing = message.authorId === currentUserId;
   const showDate = !previous || dayKey(previous.createdAt) !== dayKey(message.createdAt);
   const isMovie = message.type === 'movie_recommendation';
-  return <View>{showDate ? <Text style={styles.date}>{formatDate(message.createdAt)}</Text> : null}<View style={[styles.row, outgoing && styles.outgoing]}>{isMovie ? <View style={[styles.recommendationShell, outgoing && styles.outgoingRecommendation]}><Text style={styles.author}>{outgoing ? 'You' : message.authorDisplayNameSnapshot}</Text><MovieCard movie={message.movie} note={message.text} /><Text style={styles.time}>{formatTime(message.createdAt)}</Text></View> : <View style={[styles.bubble, outgoing && styles.outgoingBubble]}><Text style={styles.author}>{outgoing ? 'You' : message.authorDisplayNameSnapshot}</Text><Text style={styles.body}>{message.text}</Text><Text style={styles.time}>{formatTime(message.createdAt)}{('status' in message && message.status === 'failed') ? '  Failed - tap retry' : ('status' in message && message.status === 'sending') ? '  Sending...' : ''}</Text>{onRetry ? <Pressable onPress={onRetry}><Text style={styles.retry}>Retry</Text></Pressable> : null}</View>}</View></View>;
+  return <View>{showDate ? <Text style={styles.date}>{formatDate(message.createdAt)}</Text> : null}<View style={[styles.row, outgoing && styles.outgoing]}>{isMovie ? <View style={[styles.recommendationShell, outgoing && styles.outgoingRecommendation]}><Text style={styles.author}>{outgoing ? 'You' : message.authorDisplayNameSnapshot}</Text><MovieCard movie={message.movie} note={message.text} onPress={() => onMoviePress(message.groupMovieId)} /><Text style={styles.time}>{formatTime(message.createdAt)}</Text></View> : <View style={[styles.bubble, outgoing && styles.outgoingBubble]}><Text style={styles.author}>{outgoing ? 'You' : message.authorDisplayNameSnapshot}</Text><Text style={styles.body}>{message.text}</Text><Text style={styles.time}>{formatTime(message.createdAt)}{('status' in message && message.status === 'failed') ? '  Failed - tap retry' : ('status' in message && message.status === 'sending') ? '  Sending...' : ''}</Text>{onRetry ? <Pressable onPress={onRetry}><Text style={styles.retry}>Retry</Text></Pressable> : null}</View>}</View></View>;
 }
 
 const compareMessages = (left: Message | PendingMessage, right: Message | PendingMessage) => (left.createdAt?.toMillis() ?? Number.MAX_SAFE_INTEGER) - (right.createdAt?.toMillis() ?? Number.MAX_SAFE_INTEGER) || left.id.localeCompare(right.id);
@@ -202,8 +208,8 @@ const dayKey = (timestamp: TextMessage['createdAt']) => timestamp ? new Date(tim
 const formatDate = (timestamp: TextMessage['createdAt']) => timestamp ? new Date(timestamp.toMillis()).toLocaleDateString() : 'Today';
 const formatTime = (timestamp: TextMessage['createdAt']) => timestamp ? new Date(timestamp.toMillis()).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'Pending';
 
-function MovieCard({ movie, note }: { movie: MovieCatalogResult; note: string | null }) {
-  return <View style={styles.movieCard}>{movie.posterPath ? <Image source={{ uri: `https://image.tmdb.org/t/p/w185${movie.posterPath}` }} style={styles.poster} /> : <View style={styles.posterFallback}><Text style={styles.posterFallbackText}>Film</Text></View>}<View style={styles.movieInfo}><Text style={styles.movieTitle}>{movie.title}{movie.releaseYear ? ` (${movie.releaseYear})` : ''}</Text>{note ? <Text style={styles.movieNote}>{note}</Text> : null}<Text style={styles.saved}>Saved to this group&apos;s movies</Text></View></View>;
+function MovieCard({ movie, note, onPress }: { movie: MovieCatalogResult; note: string | null; onPress?: () => void }) {
+  return <Pressable onPress={onPress} style={styles.movieCard}>{movie.posterPath ? <Image source={{ uri: `https://image.tmdb.org/t/p/w185${movie.posterPath}` }} style={styles.poster} /> : <View style={styles.posterFallback}><Text style={styles.posterFallbackText}>Film</Text></View>}<View style={styles.movieInfo}><Text style={styles.movieTitle}>{movie.title}{movie.releaseYear ? ` (${movie.releaseYear})` : ''}</Text>{note ? <Text style={styles.movieNote}>{note}</Text> : null}<Text style={styles.saved}>Saved to this group&apos;s movies</Text></View></Pressable>;
 }
 
 function MovieSearch({ query, results, loading, error, onQuery, onRetry, onSelect, onClose }: { query: string; results: MovieCatalogResult[]; loading: boolean; error: string | null; onQuery: (value: string) => void; onRetry: () => void; onSelect: (movie: MovieCatalogResult) => void; onClose: () => void }) {

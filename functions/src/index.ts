@@ -263,7 +263,7 @@ export const recommendMovie = onCall(async (request) => {
 
 	const userSnapshot = await firestore.collection('users').doc(uid).get();
 	const displayName = (userSnapshot.data() as { displayName?: string } | undefined)?.displayName ?? '';
-	const messageId = `movie_${clientRequestId}`;
+	const messageId = `movie_${uid}_${clientRequestId}`;
 	const messageRef = groupRef.collection('messages').doc(messageId);
 	const groupMovieRef = groupRef.collection('groupMovies').doc(groupMovieId(movie));
 	const historyRef = groupMovieRef.collection('recommendations').doc(messageId);
@@ -271,7 +271,13 @@ export const recommendMovie = onCall(async (request) => {
 
 	await firestore.runTransaction(async (transaction) => {
 		const existing = await transaction.get(messageRef);
-		if (existing.exists) return;
+		if (existing.exists) {
+			const existingData = existing.data();
+			if (existingData?.authorId !== uid || existingData.clientRequestId !== clientRequestId) {
+				throw new HttpsError('already-exists', 'This recommendation request ID is already in use.');
+			}
+			return;
+		}
 		const existingMovie = await transaction.get(groupMovieRef);
 		const movieData = {
 			provider: movie.provider,
@@ -291,23 +297,27 @@ export const recommendMovie = onCall(async (request) => {
 			movie: movieData,
 			groupMovieId: groupMovieId(movie),
 		});
-		transaction.set(groupMovieRef, existingMovie.exists ? {
-			lastRecommendedAt: timestamp,
-			recommendationCount: (existingMovie.data()?.recommendationCount ?? 0) + 1,
-			recommenderIds: Array.from(new Set([...(existingMovie.data()?.recommenderIds ?? []), uid])).slice(0, 100),
-			updatedAt: timestamp,
-		} : {
-			...movieData,
-			firstRecommendedAt: timestamp,
-			lastRecommendedAt: timestamp,
-			firstRecommendationMessageId: messageId,
-			recommendationCount: 1,
-			recommenderIds: [uid],
-			ratingCount: 0,
-			ratingSum: 0,
-			ratingAverage: null,
-			updatedAt: timestamp,
-		});
+		if (existingMovie.exists) {
+			transaction.set(groupMovieRef, {
+				lastRecommendedAt: timestamp,
+				recommendationCount: (existingMovie.data()?.recommendationCount ?? 0) + 1,
+				recommenderIds: Array.from(new Set([...(existingMovie.data()?.recommenderIds ?? []), uid])).slice(0, 100),
+				updatedAt: timestamp,
+			}, { merge: true });
+		} else {
+			transaction.create(groupMovieRef, {
+				...movieData,
+				firstRecommendedAt: timestamp,
+				lastRecommendedAt: timestamp,
+				firstRecommendationMessageId: messageId,
+				recommendationCount: 1,
+				recommenderIds: [uid],
+				ratingCount: 0,
+				ratingSum: 0,
+				ratingAverage: null,
+				updatedAt: timestamp,
+			});
+		}
 		transaction.create(historyRef, {
 			messageId,
 			authorId: uid,

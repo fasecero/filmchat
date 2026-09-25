@@ -10,9 +10,9 @@ import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 
 const firebaseConfig = {
-  apiKey: 'demo-api-key',
-  authDomain: 'demo-filmchat.firebaseapp.com',
-  projectId: 'demo-filmchat',
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || 'demo-api-key',
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || 'demo-filmchat.firebaseapp.com',
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || 'demo-filmchat',
 };
 
 const app = getApps().length === 0

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, ScrollView, Text, TextInput, View, StyleSheet } from 'react-native';
 import {
-  loadGroupMovie,
   loadRecommendationHistory,
-  loadWatchNotes,
+  subscribeToGroupMovie,
+  subscribeToWatchNotes,
   MAX_WATCH_NOTE_PLATFORM_LENGTH,
   MAX_WATCH_NOTE_REVIEW_LENGTH,
   removeWatchNote,
@@ -26,39 +26,41 @@ export function GroupMovieDetailScreen({ groupId, groupMovieId, userId, onBack }
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const loadDetails = useCallback(() => Promise.all([
-      loadGroupMovie(groupId, groupMovieId),
-      loadRecommendationHistory(groupId, groupMovieId),
-      loadWatchNotes(groupId, groupMovieId),
-    ]), [groupId, groupMovieId]);
+  const applyMovie = useCallback((nextMovie: GroupMovie | null) => {
+    if (!nextMovie) { setError('This movie is no longer available.'); return; }
+    setMovie(nextMovie);
+  }, []);
 
-  const applyDetails = useCallback(([nextMovie, nextHistory, nextWatchNotes]: Awaited<ReturnType<typeof loadDetails>>) => {
-    if (!nextMovie) throw new Error('This movie is no longer available.');
+  const applyNotes = useCallback((nextWatchNotes: WatchNote[]) => {
     const ownNote = nextWatchNotes.find((note) => note.userId === userId);
-    setMovie(nextMovie); setHistory(nextHistory); setWatchNotes(nextWatchNotes);
+    setWatchNotes(nextWatchNotes);
     setRating(ownNote?.rating ?? null); setReviewText(ownNote?.reviewText ?? ''); setWatchedOn(ownNote?.watchedOn ?? '');
-    setEditing(!ownNote);
+    setEditing((current) => current && !ownNote);
   }, [userId]);
 
   useEffect(() => {
     let active = true;
-    void loadDetails().then((details) => { if (active) applyDetails(details); }).catch(() => { if (active) setError('We could not load this movie.'); }).finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, [loadDetails, applyDetails]);
+    void loadRecommendationHistory(groupId, groupMovieId).then((nextHistory) => { if (active) setHistory(nextHistory); }).catch(() => { if (active) setError('We could not load this movie.'); });
+    const unsubscribeMovie = subscribeToGroupMovie(groupId, groupMovieId, (nextMovie) => { if (active) applyMovie(nextMovie); }, () => { if (active) setError('We could not load this movie.'); });
+    const unsubscribeNotes = subscribeToWatchNotes(groupId, groupMovieId, (nextNotes) => { if (active) applyNotes(nextNotes); }, () => { if (active) setError('We could not load member notes.'); });
+    const markReady = () => { if (active) setLoading(false); };
+    const readyTimer = setTimeout(markReady, 0);
+    return () => { active = false; clearTimeout(readyTimer); unsubscribeMovie(); unsubscribeNotes(); };
+  }, [groupId, groupMovieId, applyMovie, applyNotes]);
 
   const save = async () => {
     const nextReview = reviewText.trim(); const nextPlatform = watchedOn.trim();
     if (nextReview.length > MAX_WATCH_NOTE_REVIEW_LENGTH || nextPlatform.length > MAX_WATCH_NOTE_PLATFORM_LENGTH) { setFormError('Your review or platform is too long.'); return; }
     if (rating === null && !nextReview && !nextPlatform) { setFormError('Add a rating, review, or platform before saving.'); return; }
     setSaving(true); setFormError(null);
-    try { await saveWatchNote(groupId, groupMovieId, { rating, reviewText: nextReview, watchedOn: nextPlatform }); applyDetails(await loadDetails()); setEditing(false); }
+    try { await saveWatchNote(groupId, groupMovieId, { rating, reviewText: nextReview, watchedOn: nextPlatform }); setEditing(false); }
     catch { setFormError('We could not save your watch note.'); }
     finally { setSaving(false); }
   };
 
   const remove = async () => {
     setSaving(true); setFormError(null);
-    try { await removeWatchNote(groupId, groupMovieId); applyDetails(await loadDetails()); }
+    try { await removeWatchNote(groupId, groupMovieId); }
     catch { setFormError('We could not remove your watch note.'); }
     finally { setSaving(false); }
   };

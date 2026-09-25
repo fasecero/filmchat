@@ -345,7 +345,8 @@ export const saveWatchNote = onCall(async (request) => {
 	const groupMovieIdValue = requireString(request.data?.groupMovieId, 'Group movie ID');
 	const remove = request.data?.remove === true;
 	const rawRating = request.data?.rating;
-	const rating = rawRating === null || rawRating === undefined || rawRating === '' ? null : rawRating;
+	const requestedRating = rawRating === null || rawRating === undefined || rawRating === '' ? null : rawRating;
+	const rating = remove ? null : requestedRating;
 	if (rating !== null && (typeof rating !== 'number' || !Number.isInteger(rating) || rating < minWatchNoteRating || rating > maxWatchNoteRating)) {
 		throw new HttpsError('invalid-argument', 'Rating must be an integer from 1 to 5.');
 	}
@@ -383,14 +384,15 @@ export const saveWatchNote = onCall(async (request) => {
 
 		const existingRating = noteSnapshot.data()?.rating;
 		const oldRating = typeof existingRating === 'number' ? existingRating : null;
-		const ratingChanged = oldRating !== rating;
+		const effectiveRating = remove ? null : rating;
+		const ratingChanged = oldRating !== effectiveRating;
 		const currentCount = typeof movieSnapshot.data()?.ratingCount === 'number' ? movieSnapshot.data()?.ratingCount : 0;
 		const currentSum = typeof movieSnapshot.data()?.ratingSum === 'number' ? movieSnapshot.data()?.ratingSum : 0;
 		let nextCount = currentCount;
 		let nextSum = currentSum;
 		if (ratingChanged) {
 			if (oldRating !== null) { nextCount -= 1; nextSum -= oldRating; }
-			if (rating !== null) { nextCount += 1; nextSum += rating; }
+			if (effectiveRating !== null) { nextCount += 1; nextSum += effectiveRating; }
 		}
 		nextCount = Math.max(0, nextCount);
 		nextSum = Math.max(0, nextSum);

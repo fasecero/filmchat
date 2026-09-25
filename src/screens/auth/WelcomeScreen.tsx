@@ -1,5 +1,6 @@
 import { Text, View, StyleSheet } from 'react-native';
 import { Button } from '../../components/auth/Button';
+import { TmdbAttribution } from '../../components/TmdbAttribution';
 
 export function WelcomeScreen({ onSignIn, onSignUp }: { onSignIn: () => void; onSignUp: () => void }) {
   return (
@@ -9,6 +10,7 @@ export function WelcomeScreen({ onSignIn, onSignUp }: { onSignIn: () => void; on
       <Text style={styles.subtitle}>Private groups, easy recommendations, one shared list.</Text>
       <Button label="Create an account" onPress={onSignUp} />
       <Button label="Sign in" onPress={onSignIn} secondary />
+      <TmdbAttribution />
     </View>
   );
 }

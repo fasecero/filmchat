@@ -42,6 +42,8 @@ export function GroupDetailScreen({ group, userId, displayName, onBack, onLeft }
   const [movieLoading, setMovieLoading] = useState(false);
   const [movieError, setMovieError] = useState<string | null>(null);
   const [movieSending, setMovieSending] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const [leaveError, setLeaveError] = useState<string | null>(null);
   const [section, setSection] = useState<'chat' | 'movies'>('chat');
   const [selectedMovieId, setSelectedMovieId] = useState<string | null>(null);
   const cursor = useRef<Parameters<typeof loadOlderMessages>[1]>(null);
@@ -166,13 +168,16 @@ export function GroupDetailScreen({ group, userId, displayName, onBack, onLeft }
   };
   const confirmLeave = () => Alert.alert('Leave group?', 'You can rejoin later with a valid invite.', [
     { text: 'Cancel', style: 'cancel' },
-    { text: 'Leave', style: 'destructive', onPress: async () => { await leaveGroup(group.id); onLeft(); } },
+    { text: 'Leave', style: 'destructive', onPress: () => {
+      setLeaving(true); setLeaveError(null);
+      void leaveGroup(group.id).then(onLeft).catch(() => setLeaveError('We could not leave this group. Try again.')).finally(() => setLeaving(false));
+    } },
   ]);
   if (selectedMovieId) return <GroupMovieDetailScreen groupId={group.id} groupMovieId={selectedMovieId} userId={userId} onBack={() => setSelectedMovieId(null)} />;
   if (section === 'movies') return <GroupMoviesScreen groupId={group.id} onBack={() => setSection('chat')} onSelect={(movie) => setSelectedMovieId(movie.id)} />;
   return <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
     <View style={styles.header}><Button label="Back" onPress={onBack} secondary /><View style={styles.headerTitle}><Text style={styles.title}>{group.name}</Text><Text style={styles.subtitle}>Private conversation</Text></View><Pressable onPress={() => setSection('movies')}><Text style={styles.headerAction}>Movies</Text></Pressable><Pressable onPress={() => void shareInvite()}><Text style={styles.headerAction}>Share</Text></Pressable></View>
-    {error ? <Text style={styles.error}>{error}</Text> : null}
+    {error ? <Text style={styles.error}>{error}</Text> : null}{leaveError ? <Text style={styles.error}>{leaveError}</Text> : null}
     {loading ? <Text style={styles.status}>Loading conversation...</Text> : <FlatList
       ref={listRef}
       data={allMessages}
@@ -191,7 +196,7 @@ export function GroupDetailScreen({ group, userId, displayName, onBack, onLeft }
     />}
     {hasNewMessages ? <Pressable style={styles.newMessages} onPress={() => { scrollToBottom(); setHasNewMessages(false); }}><Text style={styles.newMessagesText}>New messages</Text></Pressable> : null}
     {movieMode === 'search' ? <MovieSearch query={movieQuery} results={movieResults} loading={movieLoading} error={movieError} onQuery={setMovieQuery} onRetry={() => setMovieQuery((value) => `${value} ` .trim())} onSelect={(movie) => { setSelectedMovie(movie); setMovieMode('compose'); setMovieError(null); }} onClose={() => setMovieMode('closed')} /> : movieMode === 'compose' && selectedMovie ? <MovieComposer movie={selectedMovie} note={movieNote} sending={movieSending} error={movieError} onNote={setMovieNote} onSend={() => void submitRecommendation()} onBack={() => setMovieMode('search')} /> : <View style={styles.composer}><Pressable onPress={() => { setMovieMode('search'); setMovieQuery(''); setMovieError(null); }} style={styles.movieAction}><Text style={styles.movieActionText}>Movie</Text></Pressable><TextInput value={draft} onChangeText={setDraft} placeholder="Write a message" multiline style={styles.input} maxLength={2000} /><Pressable disabled={!draft.trim()} onPress={() => void send()} style={[styles.send, !draft.trim() && styles.sendDisabled]}><Text style={styles.sendText}>Send</Text></Pressable></View>}
-    <View style={styles.actions}><Button label="Leave group" onPress={confirmLeave} secondary /><Button label="Sign out" onPress={() => void signOutUser()} secondary /></View>
+    <View style={styles.actions}><Button label={leaving ? 'Leaving...' : 'Leave group'} onPress={confirmLeave} secondary /><Button label="Sign out" onPress={() => void signOutUser()} secondary /></View>
   </KeyboardAvoidingView>;
 }
 

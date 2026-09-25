@@ -53,10 +53,16 @@ export const listUserGroups = async (userId: string): Promise<Group[]> => {
           : null;
       }),
   );
-  return groups.filter((group): group is Group => group !== null);
+  return groups
+    .filter((group): group is Group => group !== null)
+    .sort((left, right) => timestampMillis(right.lastActivityAt) - timestampMillis(left.lastActivityAt));
 };
 
 export const getGroup = async (groupId: string) => {
   const snapshot = await getDoc(doc(db, 'groups', groupId));
   return snapshot.exists() ? ({ id: snapshot.id, ...snapshot.data() } as Group) : null;
 };
+
+const timestampMillis = (value: unknown) => value && typeof value === 'object' && 'toMillis' in value
+  ? (value as { toMillis: () => number }).toMillis()
+  : 0;

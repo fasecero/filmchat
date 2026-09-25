@@ -80,6 +80,10 @@ The conversation remains transient, but the group-movie record provides a shared
 - iOS simulators use `127.0.0.1` by default.
 - Physical devices use `EXPO_PUBLIC_FIREBASE_EMULATOR_HOST` and must connect to
    the development machine's LAN IP instead of `localhost`.
+- Production builds use `EXPO_PUBLIC_FIREBASE_API_KEY`,
+   `EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN`, and `EXPO_PUBLIC_FIREBASE_PROJECT_ID`.
+- The TMDB API token belongs only in Firebase Functions configuration; never add
+   it to Expo public variables or the mobile bundle.
 - The Firebase emulators listen on `0.0.0.0` so LAN clients can reach them.
 - No remote Firebase project or Firebase web app setup is required for normal local development.
 
@@ -93,6 +97,8 @@ The conversation remains transient, but the group-movie record provides a shared
 - `npm run lint` - Run ESLint
 - `npm run format` - Format code with Prettier
 - `npm run test` - Run unit and rules tests
+- `npm run test:integration` - Run the two-user Auth/Firestore/Functions emulator flow
+- `npm run release:check` - Validate release metadata/assets and report connected Android devices
 - `npm run emulators` - Start local Firebase emulator suite
 - `npm run emulators:export` - Export emulator data on exit
 
@@ -115,3 +121,10 @@ The conversation remains transient, but the group-movie record provides a shared
 The development computer and physical device must be on the same LAN, and the
 firewall must allow ports `4000`, `5001`, `8080`, and `9099`. Guest Wi-Fi or
 client isolation can prevent device-to-computer connections.
+
+### Stage 7 device checklist
+
+Run `npm run release:check`, then verify on an Android emulator and one physical
+Android device: sign in as two users, open an invite, exchange messages,
+recommend a movie, edit/remove watch notes, background and resume the app, test
+keyboard/safe-area behavior, and retry after temporarily losing connectivity.

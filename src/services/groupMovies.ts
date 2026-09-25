@@ -131,6 +131,17 @@ export const loadGroupMovie = async (groupId: string, groupMovieId: string) => {
   return snapshot.exists() ? toGroupMovie(snapshot) : null;
 };
 
+export const subscribeToGroupMovie = (
+  groupId: string,
+  groupMovieId: string,
+  onMovie: (movie: GroupMovie | null) => void,
+  onError: (error: Error) => void,
+): Unsubscribe => onSnapshot(
+  groupMovieDocument(groupId, groupMovieId),
+  (snapshot) => onMovie(snapshot.exists() ? toGroupMovie(snapshot) : null),
+  (error) => onError(error),
+);
+
 export const loadRecommendationHistory = async (groupId: string, groupMovieId: string): Promise<RecommendationHistoryItem[]> => {
   const snapshot = await getDocs(query(historyCollection(groupId, groupMovieId), orderBy('createdAt', 'desc'), limit(100)));
   return snapshot.docs.map(toRecommendationHistory).filter((item): item is RecommendationHistoryItem => item !== null);
@@ -140,6 +151,17 @@ export const loadWatchNotes = async (groupId: string, groupMovieId: string): Pro
   const snapshot = await getDocs(query(watchNotesCollection(groupId, groupMovieId), orderBy('updatedAt', 'desc'), limit(100)));
   return snapshot.docs.map(toWatchNote).filter((item): item is WatchNote => item !== null);
 };
+
+export const subscribeToWatchNotes = (
+  groupId: string,
+  groupMovieId: string,
+  onNotes: (notes: WatchNote[]) => void,
+  onError: (error: Error) => void,
+): Unsubscribe => onSnapshot(
+  query(watchNotesCollection(groupId, groupMovieId), orderBy('updatedAt', 'desc'), limit(100)),
+  (snapshot) => onNotes(snapshot.docs.map(toWatchNote).filter((item): item is WatchNote => item !== null)),
+  (error) => onError(error),
+);
 
 export const saveWatchNote = async (
   groupId: string,

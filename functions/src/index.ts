@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
-import { getTmdbMovie, searchTmdb, type MovieCatalogResult } from './tmdb';
+import { getTmdbMovie, searchTmdb, tmdbReadAccessToken, type MovieCatalogResult } from './tmdb';
 
 if (getApps().length === 0) {
 	initializeApp();
@@ -235,7 +235,7 @@ export const leaveGroup = onCall(async (request) => {
 	return { groupId, status: 'left' };
 });
 
-export const searchMovies = onCall(async (request) => {
+export const searchMovies = onCall({ secrets: [tmdbReadAccessToken] }, async (request) => {
 	requireAuth(request);
 	const query = requireBoundedString(request.data?.query, 'Search query', 100);
 	if (query.length < 2) {
@@ -244,7 +244,7 @@ export const searchMovies = onCall(async (request) => {
 	return { results: await searchTmdb(query) };
 });
 
-export const recommendMovie = onCall(async (request) => {
+export const recommendMovie = onCall({ secrets: [tmdbReadAccessToken] }, async (request) => {
 	const uid = requireAuth(request);
 	const groupId = requireString(request.data?.groupId, 'Group ID');
 	const externalMovieId = requireBoundedString(request.data?.externalMovieId, 'Movie ID', 30);

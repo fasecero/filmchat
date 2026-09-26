@@ -75,15 +75,20 @@ The conversation remains transient, but the group-movie record provides a shared
    Production `EXPO_PUBLIC_FIREBASE_*` values are not used in development.
 - Production builds require `EXPO_PUBLIC_FIREBASE_API_KEY`,
    `EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN`, and `EXPO_PUBLIC_FIREBASE_PROJECT_ID`.
-   Missing values or the demo project values cause production startup and
-   `npm run release:check` to fail rather than connecting to a demo project.
+- `EXPO_PUBLIC_FIREBASE_PROJECT_ID` must be `newfilmchat-prod`, matching the
+   `production` alias in `.firebaserc`. The API key and auth domain must come
+   from the registered Firebase web app in that project; do not guess them.
+   Missing values, a mismatched project ID, or demo values cause production
+   startup and `npm run release:check` to fail.
 - Keep production Firebase configuration in your build environment or an
-   ignored local env file such as `.env.production.local`; never commit it.
-   Provide the required variables in the process environment when running
-   `npm run release:check`. `EXPO_PUBLIC_*` values are embedded in the client app
-   and are configuration, not secrets. The TMDB API token belongs only in
-   Firebase Functions configuration; never add it to Expo public variables or
-   the mobile bundle.
+   ignored local env file. Copy `.env.production.example` to
+   `.env.production.local`, fill its API key and auth domain from Firebase
+   Console, and run `npm run release:check`; this command loads that file. Expo
+   loads the same file for production builds. CI may instead inject the variables
+   directly. Never commit local env files. `EXPO_PUBLIC_*` values are embedded in
+   the client app and are configuration, not secrets. The TMDB API token belongs
+   only in Firebase Functions configuration; never add it to Expo public
+   variables or the mobile bundle.
 - Android signing credentials must be provisioned by the selected release
    build/distribution provider and kept outside source control; `release:check`
    validates metadata and Firebase configuration, not signing credentials.
@@ -97,6 +102,9 @@ The conversation remains transient, but the group-movie record provides a shared
    the development machine's LAN IP instead of `localhost`.
 - The Firebase emulators listen on `0.0.0.0` so LAN clients can reach them.
 - No remote Firebase project or Firebase web app setup is required for normal local development.
+- `.firebaserc` keeps `demo-filmchat` as the default Firebase CLI project so
+   existing emulator/tests remain isolated. Use the explicit `production` alias
+   for intentional production deployments.
 
 ### Available Scripts
 
@@ -112,6 +120,38 @@ The conversation remains transient, but the group-movie record provides a shared
 - `npm run release:check` - Deterministically validate release metadata/assets and production Firebase settings; does not inspect attached devices or signing credentials
 - `npm run emulators` - Start local Firebase emulator suite
 - `npm run emulators:export` - Export emulator data on exit
+
+### Production Firebase setup
+
+The production project must have the Firebase Authentication Email/Password
+provider enabled and its Firestore database created (the existing database is
+in South America). Cloud Functions must also be enabled for the project; deploy
+may require a billing-enabled plan. The current callable functions use Firebase's
+default `us-central1` Functions region, while Firestore is in South America;
+they can communicate across regions, but consider selecting a Functions region
+before first deployment if reducing latency matters. Movie search/recommendation
+also requires `TMDB_READ_ACCESS_TOKEN` in the production Functions environment
+(store it in Firebase Secret Manager; see the command below). The Functions
+bind that secret only to movie search/recommendation. Local emulator runs retain
+the existing ignored `functions/.env.local` environment-variable fallback.
+
+After verifying Firebase project and `.firebaserc` alias, deploy only the
+existing Firestore rules/index definitions with:
+
+```sh
+firebase deploy --project production --only firestore
+```
+
+Configure the TMDB token interactively in Firebase Secret Manager, then deploy
+Functions separately after confirming the intended Functions region:
+
+```sh
+firebase functions:secrets:set TMDB_READ_ACCESS_TOKEN --project production
+firebase deploy --project production --only functions
+```
+
+These commands are documented for an intentional operator-run deployment; they
+are not run by tests or `release:check`.
 
 ### Project Structure
 

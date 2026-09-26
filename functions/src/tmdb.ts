@@ -1,7 +1,9 @@
 import { HttpsError } from 'firebase-functions/v2/https';
+import { defineSecret } from 'firebase-functions/params';
 
 const tmdbBaseUrl = 'https://api.themoviedb.org/3';
 const maxResults = 20;
+export const tmdbReadAccessToken = defineSecret('TMDB_READ_ACCESS_TOKEN');
 
 export type MovieCatalogResult = {
 	provider: 'tmdb';
@@ -21,7 +23,7 @@ type TmdbMovie = {
 };
 
 function getToken() {
-	const token = process.env.TMDB_READ_ACCESS_TOKEN?.trim();
+	const token = tmdbReadAccessToken.value().trim() || process.env.TMDB_READ_ACCESS_TOKEN?.trim();
 	if (!token) {
 		throw new HttpsError('failed-precondition', 'Movie search is not configured.');
 	}

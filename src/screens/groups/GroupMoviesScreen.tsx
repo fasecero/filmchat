@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Image, Pressable, Text, View, StyleSheet } from 'react-native';
+import { TmdbAttribution } from '../../components/TmdbAttribution';
 import { type GroupMovie, subscribeToGroupMovies } from '../../services/groupMovies';
 
 export function GroupMoviesScreen({ groupId, onBack, onSelect }: { groupId: string; onBack: () => void; onSelect: (movie: GroupMovie) => void }) {
@@ -28,6 +29,7 @@ export function GroupMoviesScreen({ groupId, onBack, onSelect }: { groupId: stri
         <View style={styles.info}><Text style={styles.movieTitle}>{item.title}{item.releaseYear ? ` (${item.releaseYear})` : ''}</Text><Text style={styles.meta}>{item.recommendationCount} recommendation{item.recommendationCount === 1 ? '' : 's'}</Text>{item.ratingCount > 0 ? <Text style={styles.meta}>{item.ratingAverage?.toFixed(1)} average from {item.ratingCount}</Text> : null}</View>
       </Pressable>}
     />}
+    <TmdbAttribution />
   </View>;
 }
 

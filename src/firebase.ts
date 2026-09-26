@@ -9,11 +9,32 @@ import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 
-const firebaseConfig = {
-  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || 'demo-api-key',
-  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || 'demo-filmchat.firebaseapp.com',
-  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || 'demo-filmchat',
+const developmentFirebaseConfig = {
+  apiKey: 'demo-api-key',
+  authDomain: 'demo-filmchat.firebaseapp.com',
+  projectId: 'demo-filmchat',
 };
+
+const requiredProductionValue = (name: string, value: string | undefined) => {
+  if (!value?.trim()) {
+    throw new Error(`Missing ${name}; production Firebase configuration is required.`);
+  }
+  return value.trim();
+};
+
+const firebaseConfig = __DEV__ ? developmentFirebaseConfig : {
+  apiKey: requiredProductionValue('EXPO_PUBLIC_FIREBASE_API_KEY', process.env.EXPO_PUBLIC_FIREBASE_API_KEY),
+  authDomain: requiredProductionValue('EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN', process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN),
+  projectId: requiredProductionValue('EXPO_PUBLIC_FIREBASE_PROJECT_ID', process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID),
+};
+
+if (!__DEV__ && (
+  firebaseConfig.apiKey === 'demo-api-key'
+  || firebaseConfig.authDomain === 'demo-filmchat.firebaseapp.com'
+  || firebaseConfig.projectId === 'demo-filmchat'
+)) {
+  throw new Error('Production builds cannot use the demo Firebase project configuration.');
+}
 
 const app = getApps().length === 0
   ? initializeApp(firebaseConfig)

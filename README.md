@@ -70,9 +70,24 @@ The conversation remains transient, but the group-movie record provides a shared
 
 ### Project-specific environment notes
 
-- The app initializes Firebase with a demo project ID in `src/firebase.ts`.
-- Development mode automatically connects Auth, Firestore, and Functions to
-   the configured local emulator host:
+- Development builds always initialize Firebase with the `demo-filmchat`
+   project and connect Auth, Firestore, and Functions to the local emulator host.
+   Production `EXPO_PUBLIC_FIREBASE_*` values are not used in development.
+- Production builds require `EXPO_PUBLIC_FIREBASE_API_KEY`,
+   `EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN`, and `EXPO_PUBLIC_FIREBASE_PROJECT_ID`.
+   Missing values or the demo project values cause production startup and
+   `npm run release:check` to fail rather than connecting to a demo project.
+- Keep production Firebase configuration in your build environment or an
+   ignored local env file such as `.env.production.local`; never commit it.
+   Provide the required variables in the process environment when running
+   `npm run release:check`. `EXPO_PUBLIC_*` values are embedded in the client app
+   and are configuration, not secrets. The TMDB API token belongs only in
+   Firebase Functions configuration; never add it to Expo public variables or
+   the mobile bundle.
+- Android signing credentials must be provisioned by the selected release
+   build/distribution provider and kept outside source control; `release:check`
+   validates metadata and Firebase configuration, not signing credentials.
+- Development mode automatically connects the emulators at:
    - Auth at port `9099`
    - Firestore at port `8080`
    - Functions at port `5001`
@@ -80,10 +95,6 @@ The conversation remains transient, but the group-movie record provides a shared
 - iOS simulators use `127.0.0.1` by default.
 - Physical devices use `EXPO_PUBLIC_FIREBASE_EMULATOR_HOST` and must connect to
    the development machine's LAN IP instead of `localhost`.
-- Production builds use `EXPO_PUBLIC_FIREBASE_API_KEY`,
-   `EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN`, and `EXPO_PUBLIC_FIREBASE_PROJECT_ID`.
-- The TMDB API token belongs only in Firebase Functions configuration; never add
-   it to Expo public variables or the mobile bundle.
 - The Firebase emulators listen on `0.0.0.0` so LAN clients can reach them.
 - No remote Firebase project or Firebase web app setup is required for normal local development.
 
@@ -98,7 +109,7 @@ The conversation remains transient, but the group-movie record provides a shared
 - `npm run format` - Format code with Prettier
 - `npm run test` - Run unit and rules tests
 - `npm run test:integration` - Run the two-user Auth/Firestore/Functions emulator flow
-- `npm run release:check` - Validate release metadata/assets and report connected Android devices
+- `npm run release:check` - Deterministically validate release metadata/assets and production Firebase settings; does not inspect attached devices or signing credentials
 - `npm run emulators` - Start local Firebase emulator suite
 - `npm run emulators:export` - Export emulator data on exit
 
@@ -124,7 +135,8 @@ client isolation can prevent device-to-computer connections.
 
 ### Stage 7 device checklist
 
-Run `npm run release:check`, then verify on an Android emulator and one physical
-Android device: sign in as two users, open an invite, exchange messages,
-recommend a movie, edit/remove watch notes, background and resume the app, test
-keyboard/safe-area behavior, and retry after temporarily losing connectivity.
+Run `npm run release:check` for deterministic configuration validation. Device
+acceptance remains a separate manual release activity (not part of that script):
+verify on an Android emulator and a physical Android device that sign-in, invites,
+messages, movie recommendations, watch notes, app resume, keyboard/safe-area
+behavior, and offline retry work as expected.

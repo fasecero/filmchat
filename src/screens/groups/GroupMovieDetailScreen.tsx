@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, ScrollView, Text, TextInput, View, StyleSheet } from 'react-native';
+import { TmdbAttribution } from '../../components/TmdbAttribution';
 import {
   loadRecommendationHistory,
   subscribeToGroupMovie,
@@ -21,6 +22,7 @@ export function GroupMovieDetailScreen({ groupId, groupMovieId, userId, onBack }
   const [reviewText, setReviewText] = useState('');
   const [watchedOn, setWatchedOn] = useState('');
   const [editing, setEditing] = useState(false);
+  const editingRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,9 +36,15 @@ export function GroupMovieDetailScreen({ groupId, groupMovieId, userId, onBack }
   const applyNotes = useCallback((nextWatchNotes: WatchNote[]) => {
     const ownNote = nextWatchNotes.find((note) => note.userId === userId);
     setWatchNotes(nextWatchNotes);
-    setRating(ownNote?.rating ?? null); setReviewText(ownNote?.reviewText ?? ''); setWatchedOn(ownNote?.watchedOn ?? '');
-    setEditing((current) => current && !ownNote);
+    if (!editingRef.current) {
+      setRating(ownNote?.rating ?? null); setReviewText(ownNote?.reviewText ?? ''); setWatchedOn(ownNote?.watchedOn ?? '');
+    }
   }, [userId]);
+
+  const setEditorOpen = useCallback((open: boolean) => {
+    editingRef.current = open;
+    setEditing(open);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -53,14 +61,20 @@ export function GroupMovieDetailScreen({ groupId, groupMovieId, userId, onBack }
     if (nextReview.length > MAX_WATCH_NOTE_REVIEW_LENGTH || nextPlatform.length > MAX_WATCH_NOTE_PLATFORM_LENGTH) { setFormError('Your review or platform is too long.'); return; }
     if (rating === null && !nextReview && !nextPlatform) { setFormError('Add a rating, review, or platform before saving.'); return; }
     setSaving(true); setFormError(null);
-    try { await saveWatchNote(groupId, groupMovieId, { rating, reviewText: nextReview, watchedOn: nextPlatform }); setEditing(false); }
+    try {
+      await saveWatchNote(groupId, groupMovieId, { rating, reviewText: nextReview, watchedOn: nextPlatform });
+      setRating(rating); setReviewText(nextReview); setWatchedOn(nextPlatform); setEditorOpen(false);
+    }
     catch { setFormError('We could not save your watch note.'); }
     finally { setSaving(false); }
   };
 
   const remove = async () => {
     setSaving(true); setFormError(null);
-    try { await removeWatchNote(groupId, groupMovieId); }
+    try {
+      await removeWatchNote(groupId, groupMovieId);
+      setRating(null); setReviewText(''); setWatchedOn(''); setEditorOpen(false);
+    }
     catch { setFormError('We could not remove your watch note.'); }
     finally { setSaving(false); }
   };
@@ -76,7 +90,7 @@ export function GroupMovieDetailScreen({ groupId, groupMovieId, userId, onBack }
         {movie.overview ? <Text style={styles.overview}>{movie.overview}</Text> : null}
       </View>
       <View style={styles.editor}>
-        <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Your watch note</Text>{!editing ? <Pressable onPress={() => setEditing(true)}><Text style={styles.action}>Edit</Text></Pressable> : null}</View>
+        <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Your watch note</Text>{!editing ? <Pressable onPress={() => setEditorOpen(true)}><Text style={styles.action}>Edit</Text></Pressable> : null}</View>
         {editing ? <>
           <Text style={styles.label}>Rating</Text>
           <View style={styles.stars}>{[1, 2, 3, 4, 5].map((value) => <Pressable key={value} onPress={() => setRating(value)} accessibilityLabel={`${value} star${value === 1 ? '' : 's'}`}><Text style={value <= (rating ?? 0) ? styles.starSelected : styles.star}>★</Text></Pressable>)}</View>
@@ -91,6 +105,7 @@ export function GroupMovieDetailScreen({ groupId, groupMovieId, userId, onBack }
       <Text style={styles.sectionTitle}>Recommendation history</Text>
       {history.length === 0 ? <Text style={styles.status}>No recommendation history found.</Text> : history.map((item) => <View key={item.id} style={styles.historyRow}><Text style={styles.author}>{item.authorDisplayNameSnapshot}</Text>{item.note ? <Text style={styles.note}>{item.note}</Text> : null}<Text style={styles.meta}>{formatTimestamp(item.createdAt)}</Text></View>)}
     </ScrollView> : null}
+    <TmdbAttribution />
   </View>;
 }
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Image, KeyboardAvoidingView, Platform, Pressable, Share, Text, TextInput, View, StyleSheet } from 'react-native';
 import { Button } from '../../components/auth/Button';
+import { TmdbAttribution } from '../../components/TmdbAttribution';
 import { signOutUser } from '../../services/auth';
 import { type Group } from '../../services/groups';
 import { buildInviteLink, createInvite, leaveGroup } from '../../services/invites';
@@ -196,6 +197,7 @@ export function GroupDetailScreen({ group, userId, displayName, onBack, onLeft }
     />}
     {hasNewMessages ? <Pressable style={styles.newMessages} onPress={() => { scrollToBottom(); setHasNewMessages(false); }}><Text style={styles.newMessagesText}>New messages</Text></Pressable> : null}
     {movieMode === 'search' ? <MovieSearch query={movieQuery} results={movieResults} loading={movieLoading} error={movieError} onQuery={setMovieQuery} onRetry={() => setMovieQuery((value) => `${value} ` .trim())} onSelect={(movie) => { setSelectedMovie(movie); setMovieMode('compose'); setMovieError(null); }} onClose={() => setMovieMode('closed')} /> : movieMode === 'compose' && selectedMovie ? <MovieComposer movie={selectedMovie} note={movieNote} sending={movieSending} error={movieError} onNote={setMovieNote} onSend={() => void submitRecommendation()} onBack={() => setMovieMode('search')} /> : <View style={styles.composer}><Pressable onPress={() => { setMovieMode('search'); setMovieQuery(''); setMovieError(null); }} style={styles.movieAction}><Text style={styles.movieActionText}>Movie</Text></Pressable><TextInput value={draft} onChangeText={setDraft} placeholder="Write a message" multiline style={styles.input} maxLength={2000} /><Pressable disabled={!draft.trim()} onPress={() => void send()} style={[styles.send, !draft.trim() && styles.sendDisabled]}><Text style={styles.sendText}>Send</Text></Pressable></View>}
+    <TmdbAttribution />
     <View style={styles.actions}><Button label={leaving ? 'Leaving...' : 'Leave group'} onPress={confirmLeave} secondary /><Button label="Sign out" onPress={() => void signOutUser()} secondary /></View>
   </KeyboardAvoidingView>;
 }

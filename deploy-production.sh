@@ -3,6 +3,7 @@
 set -euo pipefail
 
 PROJECT_ID="newfilmchat-prod"
+PRODUCTION_ALIAS="production"
 SECRET_NAME="TMDB_READ_ACCESS_TOKEN"
 
 echo
@@ -38,54 +39,67 @@ if [[ ! -f "functions/package-lock.json" ]]; then
 fi
 
 # --------------------------------------------------
-# 2. Select production Firebase project
+# 2. Verify production alias
 # --------------------------------------------------
 
-echo "Selecting Firebase production project..."
+echo "Checking Firebase project configuration..."
 
-firebase use production
+ALIAS_PROJECT="$(
+    python3 -c '
+import json
+import sys
 
-echo
+with open(".firebaserc") as f:
+    data = json.load(f)
 
-# --------------------------------------------------
-# 3. SAFETY CHECK
-# --------------------------------------------------
-
-ACTIVE_PROJECT="$(
-    firebase use 2>/dev/null |
-    sed -n 's/^Active Project:.*(\(.*\)).*/\1/p'
+print(data["projects"]["production"])
+'
 )"
 
-if [[ "$ACTIVE_PROJECT" != "$PROJECT_ID" ]]; then
+if [[ "$ALIAS_PROJECT" != "$PROJECT_ID" ]]; then
     echo
-    echo "ERROR: Wrong Firebase project!"
+    echo "ERROR: Production alias points to the wrong Firebase project!"
     echo
     echo "Expected:"
     echo "  $PROJECT_ID"
     echo
     echo "Actual:"
-    echo "  ${ACTIVE_PROJECT:-<unknown>}"
+    echo "  ${ALIAS_PROJECT:-<unknown>}"
     echo
     echo "Deployment aborted."
     exit 1
 fi
 
-echo "✓ Firebase project: $ACTIVE_PROJECT"
+echo "✓ production → $PROJECT_ID"
 echo
 
 # --------------------------------------------------
-# 4. Verify TMDb production secret
+# 3. Verify Firebase authentication
+# --------------------------------------------------
+
+echo "Checking Firebase authentication..."
+
+firebase login:list
+
+echo
+
+# --------------------------------------------------
+# 4. Verify production secret
 # --------------------------------------------------
 
 echo "Checking production secret..."
 
-if ! firebase functions:secrets:access "$SECRET_NAME" >/dev/null 2>&1; then
+if ! firebase functions:secrets:access \
+    "$SECRET_NAME" \
+    --project "$PROJECT_ID" \
+    >/dev/null 2>&1
+then
     echo
     echo "ERROR: Secret '$SECRET_NAME' could not be accessed."
     echo
     echo "If this is a new production project, create it with:"
     echo
-    echo "  firebase functions:secrets:set $SECRET_NAME"
+    echo "  firebase functions:secrets:set $SECRET_NAME --project $PROJECT_ID"
     echo
     exit 1
 fi
@@ -122,7 +136,9 @@ echo " Deploying Firestore"
 echo "========================================"
 echo
 
-firebase deploy --only firestore
+firebase deploy \
+    --project "$PROJECT_ID" \
+    --only firestore
 
 echo
 echo "✓ Firestore deployment completed."
@@ -137,7 +153,9 @@ echo " Deploying Cloud Functions"
 echo "========================================"
 echo
 
-firebase deploy --only functions
+firebase deploy \
+    --project "$PROJECT_ID" \
+    --only functions
 
 echo
 echo "✓ Functions deployment completed."
@@ -152,7 +170,8 @@ echo " Deployed Cloud Functions"
 echo "========================================"
 echo
 
-firebase functions:list
+firebase functions:list \
+    --project "$PROJECT_ID"
 
 echo
 echo "========================================"
@@ -168,5 +187,5 @@ echo "  ✓ Firestore indexes"
 echo "  ✓ Cloud Functions"
 echo
 echo "Verified:"
-echo "  ✓ TMDB_READ_ACCESS_TOKEN"
+echo "  ✓ $SECRET_NAME"
 echo

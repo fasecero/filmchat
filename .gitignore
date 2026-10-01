@@ -54,3 +54,4 @@ yarn-error.*
 # Firebase emulator logs
 firebase-debug.log
 firestore-debug.log
+android/keystores/

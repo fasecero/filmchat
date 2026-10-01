@@ -1,182 +1,256 @@
-# FilmChatApp
+# FilmChat
 
-FilmChatApp is a private group chat application designed for movie enthusiasts. The app allows groups of friends, partners, families, or film clubs to chat normally while preserving a durable, searchable movie history linked to original recommendation messages.
+FilmChat is a private movie discussion app for groups of friends, partners, families, and film clubs. Members can chat naturally while keeping a searchable, shared record of movie recommendations, ratings, and watch notes.
 
-## Core Concept
+## Why this app exists
 
-When a member sends a movie recommendation, the app creates both:
-1. A movie-recommendation message in the chat timeline
-2. A persistent group-movie record visible in the group movie list
+When someone recommends a movie in chat, the app creates two things at once:
 
-The conversation remains transient, but the group-movie record provides a shared, searchable history that de-duplicates the same movie within a group and lets every current member record a rating.
+1. A transient recommendation message in the group conversation
+2. A persistent group-movie record that stays searchable and shareable
 
-## MVP Features
+That gives the group a durable movie history without losing the live conversation flow. The same movie is de-duplicated within a group, and each member can add their own rating or notes.
+
+## Core features
 
 - Email/password authentication
-- Create/join private groups via shareable invite links
-- Real-time group text chat
-- Search and recommend movies from a third-party catalog
+- Private groups with shareable invite links
+- Real-time group chat
+- Movie search and recommendation from a third-party catalog
 - Persistent group movie list with per-member ratings and watch notes
 - Invite redemption and group membership management
 
-## Development Environment
+## Quick start
 
 ### Prerequisites
 
 - Node.js and npm
-- Expo app dependencies already defined in the project
-- Firebase CLI and emulator tooling already included in the project dependencies
-- Android Studio + Android emulator if you want to test on Android locally
-- macOS + Xcode only if you want to run the iOS simulator locally
+- Firebase CLI
+- Android Studio + Android emulator for Android testing
+- macOS + Xcode for iOS simulator testing
 
-### Local setup
+### Install and run locally
 
-1. Install project dependencies:
+1. Install dependencies:
+
    ```bash
    npm install
    ```
 
 2. Start the local Firebase emulators:
+
    ```bash
    npm run emulators
    ```
-   This project is configured to use the local Auth, Firestore, and Functions emulators instead of a hosted Firebase project.
 
-3. Start the Expo app in a second terminal:
+3. In a second terminal, start the Expo app:
+
    ```bash
    npm start
    ```
 
-   For a physical device on the same LAN, replace `192.168.1.105` with the
-   development computer's LAN address:
+4. If you want to test from a physical device on the same LAN:
+
    ```bash
    EXPO_PUBLIC_FIREBASE_EMULATOR_HOST=192.168.1.105 npx expo start --lan
    ```
 
-   The Android virtual device can use its host-machine alias:
+   For Android emulators, use:
+
    ```bash
    EXPO_PUBLIC_FIREBASE_EMULATOR_HOST=10.0.2.2 npx expo start
    ```
 
-4. For Android testing, run the app in an Android emulator or on a connected device:
+5. Launch Android or web targets as needed:
+
    ```bash
    npm run android
-   ```
-
-5. For web testing, if needed:
-   ```bash
    npm run web
    ```
 
-### Project-specific environment notes
+## Architecture overview
 
-- Development builds always initialize Firebase with the `demo-filmchat`
-   project and connect Auth, Firestore, and Functions to the local emulator host.
-   Production `EXPO_PUBLIC_FIREBASE_*` values are not used in development.
-- Production builds require `EXPO_PUBLIC_FIREBASE_API_KEY`,
-   `EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN`, and `EXPO_PUBLIC_FIREBASE_PROJECT_ID`.
-- `EXPO_PUBLIC_FIREBASE_PROJECT_ID` must be `newfilmchat-prod`, matching the
-   `production` alias in `.firebaserc`. The API key and auth domain must come
-   from the registered Firebase web app in that project; do not guess them.
-   Missing values, a mismatched project ID, or demo values cause production
-   startup and `npm run release:check` to fail.
-- Keep production Firebase configuration in your build environment or an
-   ignored local env file. Copy `.env.production.example` to
-   `.env.production.local`, fill its API key and auth domain from Firebase
-   Console, and run `npm run release:check`; this command loads that file. Expo
-   loads the same file for production builds. CI may instead inject the variables
-   directly. Never commit local env files. `EXPO_PUBLIC_*` values are embedded in
-   the client app and are configuration, not secrets. The TMDB API token belongs
-   only in Firebase Functions configuration; never add it to Expo public
-   variables or the mobile bundle.
-- Android signing credentials must be provisioned by the selected release
-   build/distribution provider and kept outside source control; `release:check`
-   validates metadata and Firebase configuration, not signing credentials.
-- Development mode automatically connects the emulators at:
-   - Auth at port `9099`
-   - Firestore at port `8080`
-   - Functions at port `5001`
-- Android emulators connect to the host machine via `10.0.2.2`.
+FilmChat is split between a React Native app and Firebase services:
+
+- `src/` — Expo/React Native app code
+- `functions/` — Firebase Cloud Functions for backend logic and TMDB access
+- `tests/` — unit, rules, and emulator-based integration tests
+- `assets/` — application assets
+- `firebase.json` — Firebase emulator and project configuration
+- `firestore.rules` — Firestore security rules
+- `firestore.indexes.json` — Firestore indexes
+
+The app uses:
+
+- Firebase Authentication for email/password sign-in
+- Firestore for groups, messages, invites, and movie records
+- Cloud Functions for server-side operations and movie metadata lookups
+- Firebase emulators for a local development environment
+
+## Local development setup
+
+### Environment behavior
+
+- Local development initializes Firebase with the `demo-filmchat` project.
+- Auth, Firestore, and Functions connect to the local emulator host instead of a remote Firebase project.
+- Production values such as `EXPO_PUBLIC_FIREBASE_*` are not used in local development.
+- The emulators run on:
+  - Auth: `9099`
+  - Firestore: `8080`
+  - Functions: `5001`
+- The Emulator UI is available at `http://localhost:4000` on the development machine.
+- Physical devices must connect to the machine over LAN using the host IP instead of `localhost`.
+- Android emulators connect via `10.0.2.2`.
 - iOS simulators use `127.0.0.1` by default.
-- Physical devices use `EXPO_PUBLIC_FIREBASE_EMULATOR_HOST` and must connect to
-   the development machine's LAN IP instead of `localhost`.
-- The Firebase emulators listen on `0.0.0.0` so LAN clients can reach them.
-- No remote Firebase project or Firebase web app setup is required for normal local development.
-- `.firebaserc` keeps `demo-filmchat` as the default Firebase CLI project so
-   existing emulator/tests remain isolated. Use the explicit `production` alias
-   for intentional production deployments.
 
-### Available Scripts
+### Production Firebase configuration notes
 
-- `npm start` - Start Expo development server
-- `npm run android` - Start Android app
-- `npm run ios` - Start iOS app (macOS required)
-- `npm run web` - Start web version
-- `npm run typecheck` - Run TypeScript type checking
-- `npm run lint` - Run ESLint
-- `npm run format` - Format code with Prettier
-- `npm run test` - Run unit and rules tests
-- `npm run test:integration` - Run the two-user Auth/Firestore/Functions emulator flow
-- `npm run release:check` - Deterministically validate release metadata/assets and production Firebase settings; does not inspect attached devices or signing credentials
-- `npm run emulators` - Start local Firebase emulator suite
-- `npm run emulators:export` - Export emulator data on exit
+Production builds require:
 
-### Production Firebase setup
+- `EXPO_PUBLIC_FIREBASE_API_KEY`
+- `EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN`
+- `EXPO_PUBLIC_FIREBASE_PROJECT_ID`
 
-The production project must have the Firebase Authentication Email/Password
-provider enabled and its Firestore database created (the existing database is
-in South America). Cloud Functions must also be enabled for the project; deploy
-may require a billing-enabled plan. The current callable functions use Firebase's
-default `us-central1` Functions region, while Firestore is in South America;
-they can communicate across regions, but consider selecting a Functions region
-before first deployment if reducing latency matters. Movie search/recommendation
-also requires `TMDB_READ_ACCESS_TOKEN` in the production Functions environment
-(store it in Firebase Secret Manager; see the command below). The Functions
-bind that secret only to movie search/recommendation. Local emulator runs retain
-the existing ignored `functions/.env.local` environment-variable fallback.
+`EXPO_PUBLIC_FIREBASE_PROJECT_ID` must be `newfilmchat-prod`, matching the `production` alias in `.firebaserc`.
 
-After verifying Firebase project and `.firebaserc` alias, deploy only the
-existing Firestore rules/index definitions with:
+Important project rules:
 
-```sh
+- `EXPO_PUBLIC_*` values are embedded in the client bundle and are configuration, not secrets.
+- The TMDB API token belongs only in Firebase Functions configuration, not in Expo public variables.
+- Keep local production environment files out of source control.
+- Android signing credentials must be managed by your release provider and kept outside the repo.
+
+## Available scripts
+
+```bash
+npm start
+npm run android
+npm run ios
+npm run web
+npm run typecheck
+npm run lint
+npm run format
+npm run format:check
+npm test
+npm run test:unit
+npm run test:rules
+npm run test:integration
+npm run test:callables
+npm run release:check
+npm run emulators
+npm run emulators:export
+```
+
+### Script meanings
+
+- `npm start` — start the Expo development server
+- `npm run android` — run the Android app
+- `npm run ios` — run the iOS app (macOS required)
+- `npm run web` — run the web version
+- `npm run typecheck` — TypeScript type checking
+- `npm run lint` — ESLint validation
+- `npm run format` — format the codebase with Prettier
+- `npm test` — run unit and Firestore rules tests
+- `npm run test:integration` — run the emulator-based two-user flow
+- `npm run test:callables` — run callable function tests in the emulator
+- `npm run release:check` — validate release metadata and production Firebase configuration
+- `npm run emulators` — start the local Firebase emulator suite
+- `npm run emulators:export` — export emulator data on exit
+
+## Testing
+
+The project is set up for multiple validation layers:
+
+### Unit tests
+
+```bash
+npm run test:unit
+```
+
+Covers app behavior and frontend logic.
+
+### Firestore rules tests
+
+```bash
+npm run test:rules
+```
+
+Validates Firestore access and rule enforcement.
+
+### Integration tests
+
+```bash
+npm run test:integration
+```
+
+Runs a multi-user emulator flow covering Auth, Firestore, and Functions together.
+
+### Callable function tests
+
+```bash
+npm run test:callables
+```
+
+Exercises Cloud Functions logic in the local emulator environment.
+
+## Production deployment
+
+The production project must have:
+
+- Firebase Authentication Email/Password enabled
+- Firestore database created
+- Cloud Functions enabled
+- `TMDB_READ_ACCESS_TOKEN` configured in Firebase Secret Manager
+
+### Firebase alias and project check
+
+The project expects the `production` alias to point to `newfilmchat-prod` in `.firebaserc`.
+
+### Deploy Firestore
+
+```bash
 firebase deploy --project production --only firestore
 ```
 
-Configure the TMDB token interactively in Firebase Secret Manager, then deploy
-Functions separately after confirming the intended Functions region:
+### Configure the TMDB secret
 
-```sh
+```bash
 firebase functions:secrets:set TMDB_READ_ACCESS_TOKEN --project production
+```
+
+### Deploy Functions
+
+```bash
 firebase deploy --project production --only functions
 ```
 
-These commands are documented for an intentional operator-run deployment; they
-are not run by tests or `release:check`.
+These deployment commands are intended for intentional, operator-run production updates and are not part of the normal local development workflow.
 
-### Project Structure
+## Project structure
 
-- `src/` - App source code
-- `functions/` - Firebase Cloud Functions code
-- `tests/` - Jest tests and Firestore rules tests
-- `assets/` - App assets
-- `firebase.json` - Emulator and Firebase project configuration
-- `firestore.rules` - Firestore security rules
-- `firestore.indexes.json` - Firestore indexes
+- `src/` — application source code
+- `functions/` — backend Cloud Functions
+- `tests/` — automated tests
+- `assets/` — app assets
+- `firebase.json` — Firebase config
+- `firestore.rules` — Firestore access rules
+- `firestore.indexes.json` — Firestore indexes
+- `app.json` — Expo app configuration
+- `package.json` — project scripts and dependencies
 
-### Emulator UI
+## Notes for contributors
 
-- The Firebase Emulator UI is available at `http://localhost:4000` on the
-   development computer, or at `http://192.168.1.105:4000` from a device on the
-   same LAN.
+- Development is intended to use local Firebase emulators rather than a remote Firebase project.
+- `.firebaserc` keeps `demo-filmchat` as the default CLI project for isolated local testing and emulator flows.
+- Use the explicit `production` alias only for real production deployment work.
+- The app is designed so chats remain conversational while movie recommendations persist as shareable, de-duplicated group records.
 
-The development computer and physical device must be on the same LAN, and the
-firewall must allow ports `4000`, `5001`, `8080`, and `9099`. Guest Wi-Fi or
-client isolation can prevent device-to-computer connections.
+## Stage checklist
 
-### Stage 7 device checklist
+Before release, validate the app by running:
 
-Run `npm run release:check` for deterministic configuration validation. Device
-acceptance remains a separate manual release activity (not part of that script):
-verify on an Android emulator and a physical Android device that sign-in, invites,
-messages, movie recommendations, watch notes, app resume, keyboard/safe-area
-behavior, and offline retry work as expected.
+```bash
+npm run release:check
+```
+
+Then verify the main user flows manually on an emulator and a real device, including sign-in, invites, message flow, movie recommendations, ratings, watch notes, resume behavior, and keyboard/safe-area handling.

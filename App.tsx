@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Linking, View, StyleSheet } from 'react-native';
 import type { User } from 'firebase/auth';
+import { AppLocaleProvider } from './src/i18n';
 import { subscribeToAuth } from './src/services/auth';
 import { WelcomeScreen } from './src/screens/auth/WelcomeScreen';
 import { SignInScreen } from './src/screens/auth/SignInScreen';
@@ -15,6 +16,14 @@ import { parseInviteLink } from './src/utils/inviteLink';
 import type { InviteReference } from './src/services/invites';
 
 export default function App() {
+  return (
+    <AppLocaleProvider>
+      <AppContent />
+    </AppLocaleProvider>
+  );
+}
+
+function AppContent() {
   const [user, setUser] = useState<User | null>(null); const [ready, setReady] = useState(false);
   const [pendingInvite, setPendingInvite] = useState<InviteReference | null>(null);
   const [inviteReady, setInviteReady] = useState(false);

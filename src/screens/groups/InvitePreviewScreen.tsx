@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Text, View, StyleSheet } from 'react-native';
 import { Button } from '../../components/auth/Button';
 import { ErrorMessage } from '../../components/auth/ErrorMessage';
+import { useLocale } from '../../i18n';
 import { redeemInvite, previewInvite, type InviteReference } from '../../services/invites';
 
 export function InvitePreviewScreen({ invite, onJoined, onCancel }: {
@@ -9,6 +10,7 @@ export function InvitePreviewScreen({ invite, onJoined, onCancel }: {
   onJoined: (groupId: string, groupName: string) => void;
   onCancel: () => void;
 }) {
+  const { t } = useLocale();
   const [group, setGroup] = useState<{ groupId: string; groupName: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
@@ -17,9 +19,9 @@ export function InvitePreviewScreen({ invite, onJoined, onCancel }: {
     let active = true;
     void previewInvite(invite)
       .then((preview) => { if (active) setGroup(preview); })
-      .catch(() => { if (active) setError('This invite is unavailable.'); });
+      .catch(() => { if (active) setError(t('inviteUnavailable')); });
     return () => { active = false; };
-  }, [invite]);
+  }, [invite, t]);
 
   const join = async () => {
     try {
@@ -27,19 +29,19 @@ export function InvitePreviewScreen({ invite, onJoined, onCancel }: {
       const result = await redeemInvite(invite);
       onJoined(result.groupId, result.groupName);
     } catch {
-      setError('We could not join this group. Check your connection and try again.');
+      setError(t('joinGroupError'));
       setWorking(false);
     }
   };
 
   return <View style={styles.container}>
-    <Text style={styles.eyebrow}>GROUP INVITE</Text>
+    <Text style={styles.eyebrow}>{t('groupInvite')}</Text>
     {group ? <>
       <Text style={styles.title}>{group.groupName}</Text>
-      <Text style={styles.subtitle}>You have been invited to join this private group.</Text>
-      <Button label={working ? 'Joining...' : 'Join group'} onPress={() => void join()} />
+      <Text style={styles.subtitle}>{t('privateInviteMessage')}</Text>
+      <Button label={working ? t('joining') : t('joinGroup')} onPress={() => void join()} />
     </> : error ? <ErrorMessage message={error} /> : <ActivityIndicator />}
-    <Button label="Cancel" onPress={onCancel} secondary />
+    <Button label={t('cancel')} onPress={onCancel} secondary />
   </View>;
 }
 

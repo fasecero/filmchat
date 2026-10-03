@@ -1,15 +1,18 @@
 import { Text, View, StyleSheet } from 'react-native';
 import { Button } from '../../components/auth/Button';
 import { TmdbAttribution } from '../../components/TmdbAttribution';
+import { useLocale } from '../../i18n';
 
 export function WelcomeScreen({ onSignIn, onSignUp }: { onSignIn: () => void; onSignUp: () => void }) {
+  const { t } = useLocale();
+
   return (
     <View style={styles.container}>
-      <Text style={styles.eyebrow}>FILMCHAT</Text>
-      <Text style={styles.title}>Keep the movies your group talks about.</Text>
-      <Text style={styles.subtitle}>Private groups, easy recommendations, one shared list.</Text>
-      <Button label="Create an account" onPress={onSignUp} />
-      <Button label="Sign in" onPress={onSignIn} secondary />
+      <Text style={styles.eyebrow}>{t('appName').toUpperCase()}</Text>
+      <Text style={styles.title}>{t('welcomeTitle')}</Text>
+      <Text style={styles.subtitle}>{t('welcomeSubtitle')}</Text>
+      <Button label={t('createAccount')} onPress={onSignUp} />
+      <Button label={t('signIn')} onPress={onSignIn} secondary />
       <TmdbAttribution />
     </View>
   );

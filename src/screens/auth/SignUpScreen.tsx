@@ -3,21 +3,23 @@ import { Text, View, StyleSheet } from 'react-native';
 import { Button } from '../../components/auth/Button';
 import { ErrorMessage } from '../../components/auth/ErrorMessage';
 import { InputField } from '../../components/auth/InputField';
+import { useLocale } from '../../i18n';
 import { signUp } from '../../services/auth';
 
 export function SignUpScreen({ onBack }: { onBack: () => void }) {
+  const { t } = useLocale();
   const [displayName, setDisplayName] = useState(''); const [email, setEmail] = useState('');
   const [password, setPassword] = useState(''); const [error, setError] = useState<string | null>(null);
   const submit = async () => {
-    if (!displayName.trim()) { setError('Display name is required.'); return; }
+    if (!displayName.trim()) { setError(t('displayNameRequired')); return; }
     try { setError(null); await signUp(email, password, displayName); } catch (reason) { setError(String(reason)); }
   };
   return <View style={styles.container}>
-    <Text style={styles.title}>Create your account</Text>
-    <InputField onChangeText={setDisplayName} placeholder="Display name" value={displayName} />
-    <InputField autoCapitalize="none" keyboardType="email-address" onChangeText={setEmail} placeholder="Email" value={email} />
-    <InputField onChangeText={setPassword} placeholder="Password" secureTextEntry value={password} />
-    <ErrorMessage message={error} /><Button label="Create account" onPress={submit} /><Button label="Back" onPress={onBack} secondary />
+    <Text style={styles.title}>{t('createYourAccount')}</Text>
+    <InputField onChangeText={setDisplayName} placeholder={t('displayName')} value={displayName} />
+    <InputField autoCapitalize="none" keyboardType="email-address" onChangeText={setEmail} placeholder={t('email')} value={email} />
+    <InputField onChangeText={setPassword} placeholder={t('password')} secureTextEntry value={password} />
+    <ErrorMessage message={error} /><Button label={t('createAccountButton')} onPress={submit} /><Button label={t('back')} onPress={onBack} secondary />
   </View>;
 }
 

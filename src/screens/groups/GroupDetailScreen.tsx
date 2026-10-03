@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Image, KeyboardAvoidingView, Platform, Pressable, Share, Text, TextInput, View, StyleSheet } from 'react-native';
 import { Button } from '../../components/auth/Button';
 import { TmdbAttribution } from '../../components/TmdbAttribution';
+import { useLocale } from '../../i18n';
 import { signOutUser } from '../../services/auth';
 import { type Group } from '../../services/groups';
 import { buildInviteLink, createInvite, leaveGroup } from '../../services/invites';
@@ -28,6 +29,7 @@ export function GroupDetailScreen({ group, userId, displayName, onBack, onLeft }
   onBack: () => void;
   onLeft: () => void;
 }) {
+  const { t } = useLocale();
   const [messages, setMessages] = useState<Message[]>([]);
   const [pending, setPending] = useState<Record<string, PendingMessage>>({});
   const [draft, setDraft] = useState('');
@@ -67,7 +69,7 @@ export function GroupDetailScreen({ group, userId, displayName, onBack, onLeft }
         setLoading(false);
         scrollToBottom(false);
       })
-      .catch(() => { if (active) { setError('We could not load the conversation.'); setLoading(false); } });
+      .catch(() => { if (active) { setError(t('loadConversationError')); setLoading(false); } });
     const unsubscribe = subscribeToLatestMessages(
       group.id,
       (latest) => {
@@ -81,10 +83,10 @@ export function GroupDetailScreen({ group, userId, displayName, onBack, onLeft }
         if (shouldFollow) scrollToBottom();
         else setHasNewMessages(true);
       },
-      () => { if (active) setError('The conversation is unavailable right now.'); },
+      () => { if (active) setError(t('conversationUnavailable')); },
     );
     return () => { active = false; unsubscribe(); };
-  }, [group.id]);
+  }, [group.id, t]);
 
   const allMessages = useMemo(() => {
     const merged = new Map<string, Message | PendingMessage>(messages.map((message) => [message.id, message]));
@@ -126,7 +128,7 @@ export function GroupDetailScreen({ group, userId, displayName, onBack, onLeft }
       cursor.current = page.cursor;
       setMessages((current) => mergeMessages(current, page.messages));
       setHasMore(page.hasMore);
-    } catch { setError('We could not load older messages.'); }
+    } catch { setError(t('loadOlderError')); }
     finally { loadingOlderRef.current = false; }
   };
 
@@ -139,11 +141,11 @@ export function GroupDetailScreen({ group, userId, displayName, onBack, onLeft }
       setMovieLoading(true);
       void searchMovies(movieQuery)
         .then((results) => { if (active) setMovieResults(results); })
-        .catch(() => { if (active) setMovieError('Movie search failed. Try again.'); })
+        .catch(() => { if (active) setMovieError(t('movieSearchError')); })
         .finally(() => { if (active) setMovieLoading(false); });
     }, 300);
     return () => { active = false; clearTimeout(timer); };
-  }, [movieMode, movieQuery]);
+  }, [movieMode, movieQuery, t]);
 
   const submitRecommendation = async () => {
     if (!selectedMovie || movieNote.length > 500) return;
@@ -155,7 +157,7 @@ export function GroupDetailScreen({ group, userId, displayName, onBack, onLeft }
       setSelectedMovie(null);
       setMovieNote('');
     } catch {
-      setMovieError('Recommendation failed. Try again.');
+      setMovieError(t('recommendationFailed'));
     } finally { setMovieSending(false); }
   };
 
@@ -164,22 +166,22 @@ export function GroupDetailScreen({ group, userId, displayName, onBack, onLeft }
       const invite = await createInvite(group.id);
       await Share.share({ message: buildInviteLink(invite) });
     } catch {
-      Alert.alert('Invite unavailable', 'We could not create an invite right now.');
+      Alert.alert(t('inviteUnavailable'), t('inviteShareError'));
     }
   };
-  const confirmLeave = () => Alert.alert('Leave group?', 'You can rejoin later with a valid invite.', [
-    { text: 'Cancel', style: 'cancel' },
-    { text: 'Leave', style: 'destructive', onPress: () => {
+  const confirmLeave = () => Alert.alert(t('leaveGroupPrompt'), t('leaveGroupDetails'), [
+    { text: t('cancel'), style: 'cancel' },
+    { text: t('leaveGroup'), style: 'destructive', onPress: () => {
       setLeaving(true); setLeaveError(null);
-      void leaveGroup(group.id).then(onLeft).catch(() => setLeaveError('We could not leave this group. Try again.')).finally(() => setLeaving(false));
+      void leaveGroup(group.id).then(onLeft).catch(() => setLeaveError(t('leaveGroupError'))).finally(() => setLeaving(false));
     } },
   ]);
   if (selectedMovieId) return <GroupMovieDetailScreen groupId={group.id} groupMovieId={selectedMovieId} userId={userId} onBack={() => setSelectedMovieId(null)} />;
   if (section === 'movies') return <GroupMoviesScreen groupId={group.id} onBack={() => setSection('chat')} onSelect={(movie) => setSelectedMovieId(movie.id)} />;
   return <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
-    <View style={styles.header}><Button label="Back" onPress={onBack} secondary /><View style={styles.headerTitle}><Text style={styles.title}>{group.name}</Text><Text style={styles.subtitle}>Private conversation</Text></View><Pressable onPress={() => setSection('movies')}><Text style={styles.headerAction}>Movies</Text></Pressable><Pressable onPress={() => void shareInvite()}><Text style={styles.headerAction}>Share</Text></Pressable></View>
+    <View style={styles.header}><Button label={t('back')} onPress={onBack} secondary /><View style={styles.headerTitle}><Text style={styles.title}>{group.name}</Text><Text style={styles.subtitle}>{t('privateConversation')}</Text></View><Pressable onPress={() => setSection('movies')}><Text style={styles.headerAction}>{t('movies')}</Text></Pressable><Pressable onPress={() => void shareInvite()}><Text style={styles.headerAction}>{t('share')}</Text></Pressable></View>
     {error ? <Text style={styles.error}>{error}</Text> : null}{leaveError ? <Text style={styles.error}>{leaveError}</Text> : null}
-    {loading ? <Text style={styles.status}>Loading conversation...</Text> : <FlatList
+    {loading ? <Text style={styles.status}>{t('loadingConversation')}</Text> : <FlatList
       ref={listRef}
       data={allMessages}
       keyExtractor={(item) => item.id}
@@ -193,12 +195,12 @@ export function GroupDetailScreen({ group, userId, displayName, onBack, onLeft }
       }}
       scrollEventThrottle={100}
       renderItem={({ item, index }) => <MessageRow message={item} previous={allMessages[index - 1]} currentUserId={userId} onMoviePress={setSelectedMovieId} onRetry={item.type === 'text' && pending[item.id] ? () => void send(item.clientRequestId, item.text) : undefined} />}
-      ListEmptyComponent={<Text style={styles.status}>No messages yet. Start the conversation.</Text>}
+      ListEmptyComponent={<Text style={styles.status}>{t('noMessages')}</Text>}
     />}
-    {hasNewMessages ? <Pressable style={styles.newMessages} onPress={() => { scrollToBottom(); setHasNewMessages(false); }}><Text style={styles.newMessagesText}>New messages</Text></Pressable> : null}
-    {movieMode === 'search' ? <MovieSearch query={movieQuery} results={movieResults} loading={movieLoading} error={movieError} onQuery={setMovieQuery} onRetry={() => setMovieQuery((value) => `${value} ` .trim())} onSelect={(movie) => { setSelectedMovie(movie); setMovieMode('compose'); setMovieError(null); }} onClose={() => setMovieMode('closed')} /> : movieMode === 'compose' && selectedMovie ? <MovieComposer movie={selectedMovie} note={movieNote} sending={movieSending} error={movieError} onNote={setMovieNote} onSend={() => void submitRecommendation()} onBack={() => setMovieMode('search')} /> : <View style={styles.composer}><Pressable onPress={() => { setMovieMode('search'); setMovieQuery(''); setMovieError(null); }} style={styles.movieAction}><Text style={styles.movieActionText}>Movie</Text></Pressable><TextInput value={draft} onChangeText={setDraft} placeholder="Write a message" multiline style={styles.input} maxLength={2000} /><Pressable disabled={!draft.trim()} onPress={() => void send()} style={[styles.send, !draft.trim() && styles.sendDisabled]}><Text style={styles.sendText}>Send</Text></Pressable></View>}
+    {hasNewMessages ? <Pressable style={styles.newMessages} onPress={() => { scrollToBottom(); setHasNewMessages(false); }}><Text style={styles.newMessagesText}>{t('newMessagesButton')}</Text></Pressable> : null}
+    {movieMode === 'search' ? <MovieSearch query={movieQuery} results={movieResults} loading={movieLoading} error={movieError} onQuery={setMovieQuery} onRetry={() => setMovieQuery((value) => `${value} ` .trim())} onSelect={(movie) => { setSelectedMovie(movie); setMovieMode('compose'); setMovieError(null); }} onClose={() => setMovieMode('closed')} /> : movieMode === 'compose' && selectedMovie ? <MovieComposer movie={selectedMovie} note={movieNote} sending={movieSending} error={movieError} onNote={setMovieNote} onSend={() => void submitRecommendation()} onBack={() => setMovieMode('search')} /> : <View style={styles.composer}><Pressable onPress={() => { setMovieMode('search'); setMovieQuery(''); setMovieError(null); }} style={styles.movieAction}><Text style={styles.movieActionText}>{t('movie')}</Text></Pressable><TextInput value={draft} onChangeText={setDraft} placeholder={t('writeMessage')} multiline style={styles.input} maxLength={2000} /><Pressable disabled={!draft.trim()} onPress={() => void send()} style={[styles.send, !draft.trim() && styles.sendDisabled]}><Text style={styles.sendText}>{t('send')}</Text></Pressable></View>}
     <TmdbAttribution />
-    <View style={styles.actions}><Button label={leaving ? 'Leaving...' : 'Leave group'} onPress={confirmLeave} secondary /><Button label="Sign out" onPress={() => void signOutUser()} secondary /></View>
+    <View style={styles.actions}><Button label={leaving ? t('leaving') : t('leaveGroup')} onPress={confirmLeave} secondary /><Button label={t('signOut')} onPress={() => void signOutUser()} secondary /></View>
   </KeyboardAvoidingView>;
 }
 

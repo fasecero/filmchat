@@ -10,6 +10,21 @@
       "ignore": ["node_modules", ".git", "firebase-debug.log", "firebase-debug.*.log"]
     }
   ],
+  "hosting": {
+    "site": "newfilmchat-prod",
+    "public": "hosting",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "/invite/**",
+        "destination": "/invite/index.html"
+      }
+    ]
+  },
   "emulators": {
     "singleProjectMode": true,
     "auth": {

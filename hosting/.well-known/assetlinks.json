@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.filmchatapp.mobile",
+      "sha256_cert_fingerprints": [
+        "DF:4B:6F:9D:41:9B:35:8D:0D:BB:DF:DB:97:2A:2C:FB:1F:BA:28:7A:0D:09:F4:75:85:95:5E:C8:9A:C5:8C:25"
+      ]
+    }
+  }
+]

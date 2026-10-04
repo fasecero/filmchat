@@ -201,12 +201,45 @@ The production project must have:
 - Firestore database created
 - Cloud Functions enabled
 - `TMDB_READ_ACCESS_TOKEN` configured in Firebase Secret Manager
+- Firebase Hosting configured for the `newfilmchat-prod` site
 
-### Firebase alias and project check
+### Full production deployment
 
-The project expects the `production` alias to point to `newfilmchat-prod` in `.firebaserc`.
+Run the deployment script from any working directory:
 
-### Deploy Firestore
+```bash
+./firebase-deploy-production.sh
+```
+
+The script validates the `production` alias and Hosting site, runs `npm run release:check`, verifies Firebase authentication and Secret Manager access, and installs/builds Functions before asking for confirmation. It will not deploy unless you type `newfilmchat-prod` in an interactive terminal. After confirmation, it deploys Firestore rules/indexes, Cloud Functions, and Firebase Hosting, then checks the deployed Functions and live invite page.
+
+The release check reads production Firebase client configuration from `.env.production.local` when present. Ensure its required `EXPO_PUBLIC_FIREBASE_*` values target `newfilmchat-prod` before running the script. The script also requires `firebase`, `npm`, `node`, `python3`, and `curl` on `PATH`.
+
+Hosting currently serves the static invite landing page from `hosting/`; the invite URL is `https://newfilmchat-prod.web.app/invite/`. This script does not build or deploy the Expo app and does not create an EAS preview build.
+
+### Build and optionally publish an EAS preview APK
+
+Run the preview build script from any working directory:
+
+```bash
+./eas-build-preview.sh
+```
+
+The script uses the existing EAS `preview` profile to build an Android APK, waits for the build to finish, extracts the direct artifact URL, and updates the marked APK-link section in `hosting/invite/index.html`. It requires the EAS CLI (`eas`) on `PATH` and an authenticated EAS account with access to this project. Before the first build, add `EXPO_PUBLIC_FIREBASE_API_KEY`, `EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN`, and `EXPO_PUBLIC_FIREBASE_PROJECT_ID` to the EAS project's `preview` environment with values for `newfilmchat-prod`. The preview profile is pinned to that environment; the script checks for all three variable names and stops before building if any are missing. The local `npm run release:check` validates `.env.production.local` when present, but those local values are not uploaded to EAS.
+
+After updating the local page, the script asks whether to deploy Firebase Hosting. Answer **yes** to deploy only Hosting to `newfilmchat-prod`; this also requires Firebase CLI authentication. Answer **no** to leave the generated link in the local HTML and publish it later with:
+
+```bash
+firebase deploy --project newfilmchat-prod --only hosting
+```
+
+The APK artifact is hosted by EAS, not copied into Firebase Hosting. The link is intended for preview distribution and remains subject to EAS artifact availability and retention. A Hosting deployment publishes the current contents of the `hosting/` directory, so review local Hosting changes before choosing yes.
+
+### Manual Firebase deployment commands
+
+Use these only when intentionally deploying individual Firebase resources instead of running the full script. The project expects the `production` alias to point to `newfilmchat-prod` in `.firebaserc`.
+
+Deploy Firestore:
 
 ```bash
 firebase deploy --project production --only firestore
@@ -218,13 +251,19 @@ firebase deploy --project production --only firestore
 firebase functions:secrets:set TMDB_READ_ACCESS_TOKEN --project production
 ```
 
-### Deploy Functions
+Deploy Functions (build Functions first):
 
 ```bash
 firebase deploy --project production --only functions
 ```
 
-These deployment commands are intended for intentional, operator-run production updates and are not part of the normal local development workflow.
+Deploy Hosting:
+
+```bash
+firebase deploy --project production --only hosting
+```
+
+All production deployment commands are intended for deliberate, operator-run updates and are not part of the normal local development workflow.
 
 ## Project structure
 

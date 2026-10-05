@@ -36,8 +36,26 @@
               "pathPrefix": "/invite"
             }
           ]
+        },
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ],
+          "data": [
+            {
+              "scheme": "https",
+              "host": "newfilmchat-prod.web.app",
+              "pathPrefix": "/invite"
+            }
+          ]
         }
-      ]
+      ],
+      "runtimeVersion": {
+        "policy": "appVersion"
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -47,6 +65,9 @@
         "projectId": "d8e62f86-2a92-4f41-aa29-4acb1b99915f"
       }
     },
-    "owner": "cpissaco"
+    "owner": "cpissaco",
+    "updates": {
+      "url": "https://u.expo.dev/d8e62f86-2a92-4f41-aa29-4acb1b99915f"
+    }
   }
 }

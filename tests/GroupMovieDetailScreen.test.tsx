@@ -91,14 +91,14 @@ describe('GroupMovieDetailScreen realtime watch notes', () => {
       notesListener([watchNote('viewer', 5, 'Excellent first watch')]);
     });
     expect(screen.getAllByText('Excellent first watch')).toHaveLength(2);
-    expect(screen.getByText('5.0 average from 1 rating')).toBeOnTheScreen();
+    expect(screen.getByText('5.0 average from 1 recommendation')).toBeOnTheScreen();
 
     act(() => {
       movieListener(movie(1, 3));
       notesListener([watchNote('viewer', 3, 'Updated after a rewatch')]);
     });
     expect(screen.getAllByText('Updated after a rewatch')).toHaveLength(2);
-    expect(screen.getByText('3.0 average from 1 rating')).toBeOnTheScreen();
+    expect(screen.getByText('3.0 average from 1 recommendation')).toBeOnTheScreen();
     expect(screen.queryByText('Excellent first watch')).toBeNull();
 
     act(() => {

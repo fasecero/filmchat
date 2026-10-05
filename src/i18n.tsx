@@ -243,6 +243,8 @@ export const normalizeLocale = (value?: string | null): SupportedLocale | null =
 export const pickSupportedLocale = (value?: string | null): SupportedLocale =>
   normalizeLocale(value) ?? defaultLocale;
 
+const isJestRuntime = () => typeof process !== 'undefined' && !!process.env.JEST_WORKER_ID;
+
 export const resolveLocale = (): SupportedLocale => {
   const candidates: Array<string | undefined> = [
     Platform.OS === 'ios'
@@ -251,9 +253,14 @@ export const resolveLocale = (): SupportedLocale => {
     NativeModules.I18nManager?.localeIdentifier,
     NativeModules.SettingsManager?.settings?.AppleLocale,
     NativeModules.SettingsManager?.settings?.AppleLanguages?.[0],
-    typeof navigator !== 'undefined' ? navigator.language : undefined,
-    typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().locale : undefined,
   ];
+
+  if (!isJestRuntime()) {
+    candidates.push(
+      typeof navigator !== 'undefined' ? navigator.language : undefined,
+      typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().locale : undefined,
+    );
+  }
 
   for (const candidate of candidates) {
     const locale = normalizeLocale(candidate);

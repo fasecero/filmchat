@@ -1,69 +1,215 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FilmChat Invite</title>
+  <title>Invitación a FilmChat</title>
   <style>
+    * { box-sizing: border-box; }
+
     body {
       margin: 0;
       min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      padding: 24px 12px 48px;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background: #f5f5f5;
       color: #222;
     }
 
     main {
-      width: min(90%, 420px);
-      padding: 32px;
+      width: min(100%, 460px);
+      margin: 0 auto;
+      padding: 28px 20px 36px;
       text-align: center;
       background: white;
-      border-radius: 16px;
+      border-radius: 18px;
       box-shadow: 0 4px 24px rgba(0,0,0,.08);
     }
 
     h1 {
-      margin-top: 0;
+      margin: 0 0 12px;
+      font-size: 30px;
+      line-height: 1.15;
+    }
+
+    h2 {
+      margin: 36px 0 8px;
+      font-size: 23px;
+      line-height: 1.2;
     }
 
     p {
+      margin: 0 auto 8px;
       line-height: 1.5;
       color: #555;
     }
 
-    a {
-      display: inline-block;
+    .subtitle {
+      max-width: 360px;
+    }
+
+    .button {
+      display: block;
+      width: 100%;
       margin-top: 16px;
-      padding: 12px 24px;
-      border-radius: 8px;
+      padding: 14px 18px;
+      border-radius: 10px;
       background: #222;
       color: white;
       text-decoration: none;
-      font-weight: 600;
+      font-weight: 650;
+      line-height: 1.25;
+    }
+
+    .note {
+      margin-top: 16px;
+      font-size: 15px;
+    }
+
+    .tutorial-intro {
+      margin-bottom: 22px;
+    }
+
+    .step {
+      margin-top: 22px;
+      text-align: left;
+    }
+
+    .step-title {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 9px;
+      font-weight: 700;
+      font-size: 17px;
+    }
+
+    .number {
+      flex: 0 0 auto;
+      width: 26px;
+      height: 26px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: #222;
+      color: #fff;
+      font-size: 14px;
+    }
+
+    figure {
+      margin: 0;
+    }
+
+    figure img {
+      display: block;
+      width: 100%;
+      max-width: 360px;
+      height: auto;
+      margin: 0 auto;
+      border-radius: 14px;
+      box-shadow: 0 3px 14px rgba(0,0,0,.14);
+    }
+
+    figcaption {
+      margin-top: 8px;
+      text-align: center;
+      color: #666;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    .tip {
+      margin-top: 28px;
+      padding: 14px 15px;
+      border-radius: 12px;
+      background: #f0f0f0;
+      color: #444;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    @media (min-width: 480px) {
+      main { padding-left: 30px; padding-right: 30px; }
     }
   </style>
 </head>
 
 <body>
   <main>
-    <h1>Estas invitado a FilmChat</h1>
+    <h1>Estás invitado a FilmChat</h1>
 
-    <p>
+    <p class="subtitle">
       Alguien te ha invitado a unirte a un grupo privado de FilmChat.
     </p>
 
-    <a id="open-app" href="#">Open FilmChat</a>
+    <a id="open-app" class="button" href="#">Abrir FilmChat</a>
 
     <!-- APK_PREVIEW_LINK_START -->
-    <a id="download-apk" href="https://expo.dev/artifacts/eas/Lp9Qbl9pQlfF0JcKHxGbCk8eh1VqZ3rQH-6HGqeqKLg.apk">Download FilmChat Android preview (APK)</a>
+    <a id="download-apk" class="button" href="https://expo.dev/artifacts/eas/AA0Vf85f3022Xjzt16HtLx48FQaPGkP80pMRvzQXczs.apk">Instalar FilmChat para Android</a>
     <!-- APK_PREVIEW_LINK_END -->
 
-    <p>
+    <p class="note">
       Si no tienes FilmChat instalado, instala la app y abre esta invitación de nuevo.
     </p>
+
+    <section aria-labelledby="install-title">
+      <h2 id="install-title">¿Necesitás ayuda para instalarla?</h2>
+      <p class="tutorial-intro">
+        Android puede mostrar algunas advertencias al instalar una app descargada fuera de Google Play.
+      </p>
+
+      <div class="step">
+        <div class="step-title">
+          <span class="number">1</span>
+          Descargá el APK
+        </div>
+        <figure>
+          <img src="tutorial/01-descarga.jpg" alt="Chrome descargando el APK de FilmChat">
+          <figcaption>Después de tocar “Instalar FilmChat para Android”, comienza la descarga.</figcaption>
+        </figure>
+      </div>
+
+      <div class="step">
+        <div class="step-title">
+          <span class="number">2</span>
+          Confirmá la descarga
+        </div>
+        <figure>
+          <img src="tutorial/02-advertencia-descarga.jpg" alt="Android advierte que el archivo APK podría ser dañino">
+          <figcaption>Si Android muestra esta advertencia, elegí “Descargar de todos modos”.</figcaption>
+        </figure>
+      </div>
+
+      <div class="step">
+        <div class="step-title">
+          <span class="number">3</span>
+          Instalá la aplicación
+        </div>
+        <figure>
+          <img src="tutorial/03-instalar.jpg" alt="Android pregunta si se quiere instalar FilmChatApp">
+          <figcaption>Cuando termine la descarga, elegí “Instalar”.</figcaption>
+        </figure>
+      </div>
+
+      <div class="step">
+        <div class="step-title">
+          <span class="number">4</span>
+          Confirmá en Play Protect
+        </div>
+        <figure>
+          <img src="tutorial/04-play-protect.jpg" alt="Google Play Protect muestra una advertencia sobre FilmChatApp">
+          <figcaption>
+            Play Protect puede advertir que no reconoce todavía esta aplicación.
+            Si estás instalando FilmChat desde este enlace, elegí “Instalar de todas formas”.
+          </figcaption>
+        </figure>
+      </div>
+
+      <div class="tip">
+        Una vez instalada, abrí nuevamente el enlace de invitación para entrar al grupo de FilmChat.
+      </div>
+    </section>
   </main>
 
   <script>

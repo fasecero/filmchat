@@ -48,6 +48,35 @@ function groupMovieId(movie: MovieCatalogResult) {
 	return `tmdb_${movie.externalMovieId}`;
 }
 
+function receivedRecommendationInboxEntry(
+	groupId: string,
+	groupName: string,
+	messageId: string,
+	movie: MovieCatalogResult,
+	recommenderId: string,
+	displayName: string,
+	note: string,
+	timestamp: FirebaseFirestore.FieldValue,
+) {
+	return {
+		groupId,
+		groupName,
+		movieId: groupMovieId(movie),
+		externalMovieId: movie.externalMovieId,
+		provider: movie.provider,
+		title: movie.title,
+		releaseYear: movie.releaseYear,
+		posterPath: movie.posterPath,
+		recommendedByUserId: recommenderId,
+		recommendedByDisplayNameSnapshot: displayName,
+		note: note || null,
+		recommendedAt: timestamp,
+		seen: false,
+		seenAt: null,
+		updatedAt: timestamp,
+	};
+}
+
 function requireAuth(request: { auth?: { uid: string } | null }) {
 	if (!request.auth) {
 		throw new HttpsError('unauthenticated', 'Authentication is required.');
@@ -272,6 +301,7 @@ export const recommendMovie = onCall({ secrets: [tmdbReadAccessToken] }, async (
 	const groupMovieRef = groupRef.collection('groupMovies').doc(groupMovieId(movie));
 	const historyRef = groupMovieRef.collection('recommendations').doc(messageId);
 	const timestamp = FieldValue.serverTimestamp();
+	const activeMembersSnapshot = await groupRef.collection('members').where('status', '==', 'active').get();
 
 	await firestore.runTransaction(async (transaction) => {
 		const existing = await transaction.get(messageRef);
@@ -334,6 +364,21 @@ export const recommendMovie = onCall({ secrets: [tmdbReadAccessToken] }, async (
 			lastActivityAt: timestamp,
 			lastActivityPreview: `Recommended ${movie.title}`.slice(0, 200),
 		});
+
+		for (const memberSnapshot of activeMembersSnapshot.docs) {
+			if (memberSnapshot.id === uid) continue;
+			const inboxRef = firestore.collection('users').doc(memberSnapshot.id).collection('receivedRecommendations').doc(messageId);
+			transaction.set(inboxRef, receivedRecommendationInboxEntry(
+				groupId,
+				(groupSnapshot.data() as { name?: string } | undefined)?.name ?? '',
+				messageId,
+				movie,
+				uid,
+				displayName,
+				note,
+				timestamp,
+			));
+		}
 	});
 
 	return { messageId, clientRequestId, movie, groupMovieId: groupMovieId(movie), note: note || null };

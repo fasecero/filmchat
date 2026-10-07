@@ -78,6 +78,15 @@ service cloud.firestore {
       }
     }
 
+    match /users/{userId}/receivedRecommendations/{recommendationId} {
+      allow read: if isUser(userId);
+      allow create: if false;
+      allow update: if isUser(userId)
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['seen', 'seenAt', 'updatedAt']);
+      allow delete: if false;
+    }
+
     match /users/{userId}/groups/{groupId} {
       allow read: if isUser(userId);
       allow create: if isUser(userId)

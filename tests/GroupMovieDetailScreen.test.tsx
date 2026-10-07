@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { GroupDetailScreen } from '../src/screens/groups/GroupDetailScreen';
 import { GroupMovieDetailScreen } from '../src/screens/groups/GroupMovieDetailScreen';
 import { GroupMoviesScreen } from '../src/screens/groups/GroupMoviesScreen';
 import {
@@ -11,6 +12,12 @@ import {
   type GroupMovie,
   type WatchNote,
 } from '../src/services/groupMovies';
+import {
+  loadOlderMessages,
+  normalizeMessageText,
+  sendTextMessage,
+  subscribeToLatestMessages,
+} from '../src/services/messages';
 
 type MovieCallback = (movie: GroupMovie | null) => void;
 type MoviesCallback = (movies: GroupMovie[]) => void;
@@ -19,6 +26,21 @@ type NotesCallback = (notes: WatchNote[]) => void;
 const movieSubscriptions: { groupId: string; groupMovieId: string; onMovie: MovieCallback; unsubscribe: jest.Mock }[] = [];
 const moviesSubscriptions: { groupId: string; onMovies: MoviesCallback; unsubscribe: jest.Mock }[] = [];
 const noteSubscriptions: { groupId: string; groupMovieId: string; onNotes: NotesCallback; unsubscribe: jest.Mock }[] = [];
+
+jest.mock('../src/services/auth', () => ({
+  signOutUser: jest.fn(),
+}));
+
+jest.mock('../src/services/invites', () => ({
+  buildInviteLink: jest.fn(),
+  createInvite: jest.fn(),
+  leaveGroup: jest.fn(),
+}));
+
+jest.mock('../src/services/movies', () => ({
+  searchMovies: jest.fn(),
+  recommendMovie: jest.fn(),
+}));
 
 jest.mock('../src/services/groupMovies', () => ({
   loadRecommendationHistory: jest.fn(),
@@ -29,6 +51,14 @@ jest.mock('../src/services/groupMovies', () => ({
   subscribeToWatchNotes: jest.fn(),
   MAX_WATCH_NOTE_PLATFORM_LENGTH: 80,
   MAX_WATCH_NOTE_REVIEW_LENGTH: 1000,
+}));
+
+jest.mock('../src/services/messages', () => ({
+  loadOlderMessages: jest.fn(),
+  normalizeMessageText: jest.fn((value: string) => value.trim()),
+  sendTextMessage: jest.fn(),
+  subscribeToLatestMessages: jest.fn(),
+  createClientRequestId: jest.fn(() => 'client-request-id'),
 }));
 
 const movie = (ratingCount = 0, ratingAverage: number | null = null): GroupMovie => ({
@@ -52,9 +82,11 @@ beforeEach(() => {
   moviesSubscriptions.length = 0;
   noteSubscriptions.length = 0;
   jest.clearAllMocks();
+  jest.mocked(loadOlderMessages).mockResolvedValue({ messages: [], cursor: null, hasMore: false });
   jest.mocked(loadRecommendationHistory).mockResolvedValue([]);
   jest.mocked(saveWatchNote).mockResolvedValue({ groupId: 'group-1', groupMovieId: 'tmdb_603', removed: false });
   jest.mocked(removeWatchNote).mockResolvedValue({ groupId: 'group-1', groupMovieId: 'tmdb_603', removed: true });
+  jest.mocked(subscribeToLatestMessages).mockReturnValue(jest.fn());
   jest.mocked(subscribeToGroupMovie).mockImplementation((groupId, groupMovieId, onMovie) => {
     const unsubscribe = jest.fn();
     movieSubscriptions.push({ groupId, groupMovieId, onMovie, unsubscribe });
@@ -63,12 +95,31 @@ beforeEach(() => {
   jest.mocked(subscribeToGroupMovies).mockImplementation((groupId, onMovies) => {
     const unsubscribe = jest.fn();
     moviesSubscriptions.push({ groupId, onMovies, unsubscribe });
+    onMovies([]);
     return unsubscribe;
   });
   jest.mocked(subscribeToWatchNotes).mockImplementation((groupId, groupMovieId, onNotes) => {
     const unsubscribe = jest.fn();
     noteSubscriptions.push({ groupId, groupMovieId, onNotes, unsubscribe });
     return unsubscribe;
+  });
+});
+
+describe('GroupDetailScreen default section', () => {
+  it('opens a group on the Movies view by default', async () => {
+    render(
+      <GroupDetailScreen
+        group={{ id: 'group-1', name: 'Weekend Watch', ownerId: 'viewer' }}
+        userId="viewer"
+        displayName="Viewer"
+        onBack={jest.fn()}
+        onLeft={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Movies')).toBeOnTheScreen();
+    expect(screen.getByText('Movies recommended in this group will appear here.')).toBeOnTheScreen();
+    expect(screen.queryByText('No messages yet. Start the conversation.')).toBeNull();
   });
 });
 

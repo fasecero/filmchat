@@ -15,10 +15,12 @@ That gives the group a durable movie history without losing the live conversatio
 
 - Email/password authentication
 - Private groups with shareable invite links
-- Real-time group chat
+- Real-time group chat as a secondary discussion space
 - Movie search and recommendation from a third-party catalog
-- Persistent group movie list with per-member ratings and watch notes
+- Persistent group movie list as the default group experience with per-member ratings and watch notes
 - Invite redemption and group membership management
+
+When a member opens a group, the app shows that group's movie list first. Chat remains available as a discussion layer attached to the group's movies and recommendations.
 
 ## Quick start
 

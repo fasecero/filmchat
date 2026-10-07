@@ -47,7 +47,7 @@ export function GroupDetailScreen({ group, userId, displayName, onBack, onLeft }
   const [movieSending, setMovieSending] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [leaveError, setLeaveError] = useState<string | null>(null);
-  const [section, setSection] = useState<'chat' | 'movies'>('chat');
+  const [section, setSection] = useState<'chat' | 'movies'>('movies');
   const [selectedMovieId, setSelectedMovieId] = useState<string | null>(null);
   const cursor = useRef<Parameters<typeof loadOlderMessages>[1]>(null);
   const listRef = useRef<FlatList<Message | PendingMessage>>(null);

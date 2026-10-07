@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, ScrollView, Text, TextInput, View, StyleSheet } from 'react-native';
+import { ActivityIndicator, Image, Linking, Pressable, ScrollView, Text, TextInput, View, StyleSheet } from 'react-native';
 import { TmdbAttribution } from '../../components/TmdbAttribution';
 import { useLocale } from '../../i18n';
 import {
+  enrichGroupMovieMetadata,
   loadRecommendationHistory,
   subscribeToGroupMovie,
   subscribeToWatchNotes,
@@ -25,6 +26,7 @@ export function GroupMovieDetailScreen({ groupId, groupMovieId, userId, onBack }
   const [watchedOn, setWatchedOn] = useState('');
   const [editing, setEditing] = useState(false);
   const editingRef = useRef(false);
+  const metadataRequestRef = useRef<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,6 +60,16 @@ export function GroupMovieDetailScreen({ groupId, groupMovieId, userId, onBack }
     return () => { active = false; clearTimeout(readyTimer); unsubscribeMovie(); unsubscribeNotes(); };
   }, [groupId, groupMovieId, applyMovie, applyNotes, t]);
 
+  useEffect(() => {
+    if (!movie || movie.id !== groupMovieId || (movie.originalTitle && movie.imdbId)) return;
+    const requestKey = `${groupId}/${groupMovieId}`;
+    if (metadataRequestRef.current === requestKey) return;
+    metadataRequestRef.current = requestKey;
+    void enrichGroupMovieMetadata(groupId, groupMovieId).catch(() => {
+      // Metadata is optional; keep the existing movie detail usable if lookup fails.
+    });
+  }, [groupId, groupMovieId, movie]);
+
   const save = async () => {
     const nextReview = reviewText.trim(); const nextPlatform = watchedOn.trim();
     if (nextReview.length > MAX_WATCH_NOTE_REVIEW_LENGTH || nextPlatform.length > MAX_WATCH_NOTE_PLATFORM_LENGTH) { setFormError(t('noteTooLong')); return; }
@@ -81,14 +93,19 @@ export function GroupMovieDetailScreen({ groupId, groupMovieId, userId, onBack }
     finally { setSaving(false); }
   };
 
+  const imdbUrl = movie?.imdbId ? `https://www.imdb.com/title/${movie.imdbId}` : null;
+
   return <View style={styles.container}>
     <View style={styles.header}><Pressable onPress={onBack}><Text style={styles.action}>{t('back')}</Text></Pressable><Text style={styles.title}>{t('movie')}</Text><View style={styles.headerSpacer} /></View>
     {loading ? <ActivityIndicator /> : error ? <Text style={styles.status}>{error}</Text> : movie ? <ScrollView contentContainerStyle={styles.content}>
       <View style={styles.summary}>
         {movie.posterPath ? <Image source={{ uri: `https://image.tmdb.org/t/p/w342${movie.posterPath}` }} style={styles.poster} /> : <View style={styles.posterFallback}><Text style={styles.posterFallbackText}>{t('movieUnknown')}</Text></View>}
-        <Text style={styles.movieTitle}>{movie.title}{movie.releaseYear ? ` (${movie.releaseYear})` : ''}</Text>
+        {movie.originalTitle && movie.originalTitle !== movie.title ? <Text style={styles.titleLabel}>{t('originalTitleLabel')}</Text> : null}
+        <Text style={styles.movieTitle}>{movie.originalTitle || movie.title}{movie.releaseYear ? ` (${movie.releaseYear})` : ''}</Text>
+        {movie.originalTitle && movie.originalTitle !== movie.title ? <Text style={styles.secondaryTitle}>{t('englishTitle')}: {movie.title}</Text> : null}
         <Text style={styles.meta}>{movie.recommendationCount} {movie.recommendationCount === 1 ? t('recommendationCountOne') : t('recommendationCountMany')}</Text>
         <Text style={styles.meta}>{movie.ratingAverage === null ? t('noRatingsYet') : `${movie.ratingAverage.toFixed(1)} ${t('averageFromCount')} ${movie.ratingCount} ${movie.ratingCount === 1 ? t('recommendationCountOne') : t('recommendationCountMany')}`}</Text>
+        {imdbUrl ? <Pressable accessibilityRole="link" onPress={() => void Linking.openURL(imdbUrl)} style={styles.imdbButton}><Text style={styles.imdbText}>{t('viewOnImdb')}</Text></Pressable> : null}
         {movie.overview ? <Text style={styles.overview}>{movie.overview}</Text> : null}
       </View>
       <View style={styles.editor}>
@@ -119,7 +136,7 @@ const styles = StyleSheet.create({
   title: { color: '#17313B', fontSize: 24, fontWeight: '800' }, action: { color: '#C05640', fontWeight: '800', padding: 10 }, headerSpacer: { width: 54 },
   content: { gap: 12, paddingBottom: 24 }, summary: { alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 12, gap: 6, padding: 16 },
   poster: { borderRadius: 8, height: 220, width: 148 }, posterFallback: { alignItems: 'center', backgroundColor: '#D5DFDA', borderRadius: 8, height: 220, justifyContent: 'center', width: 148 }, posterFallbackText: { color: '#52656B', fontSize: 14, fontWeight: '700' },
-  movieTitle: { color: '#17313B', fontSize: 20, fontWeight: '800', textAlign: 'center' }, meta: { color: '#52656B', fontSize: 13 }, overview: { color: '#52656B', lineHeight: 20, marginTop: 6 },
+  titleLabel: { color: '#52656B', fontSize: 12, fontWeight: '700', textAlign: 'center' }, movieTitle: { color: '#17313B', fontSize: 20, fontWeight: '800', textAlign: 'center' }, secondaryTitle: { color: '#52656B', fontSize: 13, textAlign: 'center' }, meta: { color: '#52656B', fontSize: 13 }, overview: { color: '#52656B', lineHeight: 20, marginTop: 6 }, imdbButton: { backgroundColor: '#F2D9C9', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 }, imdbText: { color: '#7B442E', fontWeight: '800' },
   editor: { backgroundColor: '#FFFFFF', borderRadius: 12, gap: 8, padding: 16 }, sectionHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' }, sectionTitle: { color: '#17313B', fontSize: 18, fontWeight: '800', marginTop: 8 }, label: { color: '#52656B', fontSize: 13, fontWeight: '700' },
   stars: { flexDirection: 'row', gap: 8 }, star: { color: '#B8C1BC', fontSize: 32 }, starSelected: { color: '#C05640', fontSize: 32 }, starsText: { color: '#C05640', fontSize: 18 }, input: { borderColor: '#D5DFDA', borderRadius: 8, borderWidth: 1, color: '#17313B', padding: 10 }, reviewInput: { minHeight: 72, textAlignVertical: 'top' }, error: { color: '#A13A2A', fontSize: 13 },
   buttonRow: { flexDirection: 'row', gap: 10 }, primaryButton: { backgroundColor: '#C05640', borderRadius: 8, padding: 12 }, primaryText: { color: '#FFFFFF', fontWeight: '800' }, secondaryButton: { borderColor: '#C05640', borderRadius: 8, borderWidth: 1, padding: 12 }, secondaryText: { color: '#C05640', fontWeight: '800' }, noteSummary: { gap: 5 }, note: { color: '#17313B', lineHeight: 19 },

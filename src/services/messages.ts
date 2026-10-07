@@ -34,6 +34,8 @@ export type MovieCatalogResult = {
   provider: 'tmdb';
   externalMovieId: string;
   title: string;
+  originalTitle?: string | null;
+  imdbId?: string | null;
   releaseYear: number | null;
   posterPath: string | null;
   overview: string | null;
@@ -85,6 +87,8 @@ const toMessage = (snapshot: QueryDocumentSnapshot<DocumentData>): Message => {
         provider: 'tmdb',
         externalMovieId: data.movie.externalMovieId,
         title: data.movie.title,
+        originalTitle: typeof data.movie.originalTitle === 'string' ? data.movie.originalTitle : null,
+        imdbId: typeof data.movie.imdbId === 'string' ? data.movie.imdbId : null,
         releaseYear: typeof data.movie.releaseYear === 'number' ? data.movie.releaseYear : null,
         posterPath: typeof data.movie.posterPath === 'string' ? data.movie.posterPath : null,
         overview: typeof data.movie.overview === 'string' ? data.movie.overview : null,

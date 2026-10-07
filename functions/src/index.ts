@@ -317,6 +317,8 @@ export const recommendMovie = onCall({ secrets: [tmdbReadAccessToken] }, async (
 			provider: movie.provider,
 			externalMovieId: movie.externalMovieId,
 			title: movie.title,
+			originalTitle: movie.originalTitle ?? null,
+			imdbId: movie.imdbId ?? null,
 			releaseYear: movie.releaseYear,
 			posterPath: movie.posterPath,
 			overview: movie.overview,
@@ -382,6 +384,61 @@ export const recommendMovie = onCall({ secrets: [tmdbReadAccessToken] }, async (
 	});
 
 	return { messageId, clientRequestId, movie, groupMovieId: groupMovieId(movie), note: note || null };
+});
+
+export const enrichGroupMovieMetadata = onCall({ secrets: [tmdbReadAccessToken] }, async (request) => {
+	const uid = requireAuth(request);
+	const groupId = requireString(request.data?.groupId, 'Group ID');
+	const groupMovieIdValue = requireString(request.data?.groupMovieId, 'Group movie ID');
+	const groupRef = firestore.collection('groups').doc(groupId);
+	const groupMovieRef = groupRef.collection('groupMovies').doc(groupMovieIdValue);
+	const memberRef = groupRef.collection('members').doc(uid);
+	const [groupSnapshot, memberSnapshot, movieSnapshot] = await Promise.all([
+		groupRef.get(),
+		memberRef.get(),
+		groupMovieRef.get(),
+	]);
+	if (!groupSnapshot.exists || !memberSnapshot.exists || memberSnapshot.data()?.status !== 'active') {
+		throw new HttpsError('permission-denied', 'Active group membership is required.');
+	}
+	if (!movieSnapshot.exists) {
+		throw new HttpsError('not-found', 'The group movie was not found.');
+	}
+	const movieData = movieSnapshot.data();
+	if (movieData?.provider !== 'tmdb' || typeof movieData.externalMovieId !== 'string') {
+		throw new HttpsError('failed-precondition', 'The group movie has invalid catalog metadata.');
+	}
+
+	const tmdbMovie = await getTmdbMovie(movieData.externalMovieId);
+	let originalTitle: string | null = null;
+	let imdbId: string | null = null;
+	await firestore.runTransaction(async (transaction) => {
+		const [currentGroup, currentMember, currentMovie] = await Promise.all([
+			transaction.get(groupRef),
+			transaction.get(memberRef),
+			transaction.get(groupMovieRef),
+		]);
+		if (!currentGroup.exists || !currentMember.exists || currentMember.data()?.status !== 'active') {
+			throw new HttpsError('permission-denied', 'Active group membership is required.');
+		}
+		if (!currentMovie.exists) {
+			throw new HttpsError('not-found', 'The group movie was not found.');
+		}
+		const currentData = currentMovie.data();
+		originalTitle = typeof currentData?.originalTitle === 'string' && currentData.originalTitle.length > 0
+			? currentData.originalTitle
+			: tmdbMovie.originalTitle ?? null;
+		imdbId = typeof currentData?.imdbId === 'string' && currentData.imdbId.length > 0
+			? currentData.imdbId
+			: tmdbMovie.imdbId ?? null;
+		transaction.set(groupMovieRef, {
+			originalTitle,
+			imdbId,
+			updatedAt: FieldValue.serverTimestamp(),
+		}, { merge: true });
+	});
+
+	return { groupId, groupMovieId: groupMovieIdValue, originalTitle, imdbId };
 });
 
 export const saveWatchNote = onCall(async (request) => {

@@ -1,5 +1,5 @@
 import { getFirestore } from '../../functions/node_modules/firebase-admin/lib/firestore/index.js';
-import { recommendMovie, saveWatchNote } from '../../functions/src/index';
+import { enrichGroupMovieMetadata as enrichGroupMovieMetadataCallable, recommendMovie, saveWatchNote } from '../../functions/src/index';
 import * as tmdbModule from '../../functions/src/tmdb';
 
 const firestore = getFirestore();
@@ -149,5 +149,70 @@ describe('recommendMovie callable', () => {
 
     const recommenderInbox = await firestore.doc(`users/${recommenderId}/receivedRecommendations/${recommendationMessageId}`).get();
     expect(recommenderInbox.exists).toBe(false);
+  });
+});
+
+describe('enrichGroupMovieMetadata callable', () => {
+  const metadataGroupId = 'metadata-enrichment-group';
+  const metadataGroupMovieId = 'tmdb_603';
+  const metadataUserId = 'metadata-enrichment-user';
+  const metadataMovieReference = firestore.doc(`groups/${metadataGroupId}/groupMovies/${metadataGroupMovieId}`);
+
+  const callEnrichMetadata = (uid: string | null = metadataUserId) => enrichGroupMovieMetadataCallable.run({
+    data: { groupId: metadataGroupId, groupMovieId: metadataGroupMovieId },
+    auth: uid ? { uid } : null,
+  } as unknown as Parameters<typeof enrichGroupMovieMetadataCallable.run>[0]);
+
+  beforeEach(async () => {
+    jest.spyOn(tmdbModule, 'getTmdbMovie').mockResolvedValue({
+      provider: 'tmdb',
+      externalMovieId: '603',
+      title: 'The Matrix',
+      originalTitle: 'The Matrix',
+      imdbId: 'tt0133093',
+      releaseYear: 1999,
+      posterPath: '/matrix.jpg',
+      overview: 'A classic',
+    });
+    await firestore.doc(`groups/${metadataGroupId}`).set({ name: 'Metadata Group' });
+    await firestore.doc(`groups/${metadataGroupId}/members/${metadataUserId}`).set({ status: 'active' });
+    await metadataMovieReference.set({
+      provider: 'tmdb',
+      externalMovieId: '603',
+      title: 'The Matrix',
+      recommendationCount: 4,
+      ratingCount: 2,
+      ratingSum: 9,
+      ratingAverage: 4.5,
+    });
+  });
+
+  afterEach(async () => {
+    jest.restoreAllMocks();
+    await metadataMovieReference.delete();
+    await firestore.doc(`groups/${metadataGroupId}/members/${metadataUserId}`).delete();
+    await firestore.doc(`groups/${metadataGroupId}/members/inactive-metadata-user`).delete();
+    await firestore.doc(`groups/${metadataGroupId}`).delete();
+  });
+
+  it('backfills metadata without changing existing movie aggregates', async () => {
+    const result = await callEnrichMetadata();
+
+    expect(result).toMatchObject({ originalTitle: 'The Matrix', imdbId: 'tt0133093' });
+    expect((await metadataMovieReference.get()).data()).toMatchObject({
+      originalTitle: 'The Matrix',
+      imdbId: 'tt0133093',
+      recommendationCount: 4,
+      ratingCount: 2,
+      ratingSum: 9,
+      ratingAverage: 4.5,
+    });
+  });
+
+  it('denies inactive members before requesting movie metadata', async () => {
+    await firestore.doc(`groups/${metadataGroupId}/members/inactive-metadata-user`).set({ status: 'left' });
+
+    await expect(callEnrichMetadata('inactive-metadata-user')).rejects.toMatchObject({ code: 'permission-denied' });
+    expect(tmdbModule.getTmdbMovie).not.toHaveBeenCalled();
   });
 });

@@ -9,6 +9,8 @@ export type MovieCatalogResult = {
 	provider: 'tmdb';
 	externalMovieId: string;
 	title: string;
+	originalTitle?: string | null;
+	imdbId?: string | null;
 	releaseYear: number | null;
 	posterPath: string | null;
 	overview: string | null;
@@ -17,6 +19,8 @@ export type MovieCatalogResult = {
 type TmdbMovie = {
 	id?: unknown;
 	title?: unknown;
+	original_title?: unknown;
+	imdb_id?: unknown;
 	release_date?: unknown;
 	poster_path?: unknown;
 	overview?: unknown;
@@ -38,10 +42,14 @@ function releaseYear(value: unknown) {
 export function mapTmdbMovie(movie: TmdbMovie): MovieCatalogResult | null {
 	if (typeof movie.id !== 'number' || !Number.isInteger(movie.id) || movie.id <= 0) return null;
 	if (typeof movie.title !== 'string' || movie.title.trim().length === 0) return null;
+	const originalTitle = typeof movie.original_title === 'string' && movie.original_title.trim().length > 0 ? movie.original_title.trim().slice(0, 200) : null;
+	const imdbId = typeof movie.imdb_id === 'string' && movie.imdb_id.trim().length > 0 ? movie.imdb_id.trim().slice(0, 20) : null;
 	return {
 		provider: 'tmdb',
 		externalMovieId: String(movie.id),
 		title: movie.title.trim().slice(0, 200),
+		originalTitle,
+		imdbId,
 		releaseYear: releaseYear(movie.release_date),
 		posterPath: typeof movie.poster_path === 'string' ? movie.poster_path.slice(0, 200) : null,
 		overview: typeof movie.overview === 'string' ? movie.overview.trim().slice(0, 1000) || null : null,

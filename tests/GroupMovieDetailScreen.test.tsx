@@ -1,8 +1,10 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { Linking } from 'react-native';
 import { GroupDetailScreen } from '../src/screens/groups/GroupDetailScreen';
 import { GroupMovieDetailScreen } from '../src/screens/groups/GroupMovieDetailScreen';
 import { GroupMoviesScreen } from '../src/screens/groups/GroupMoviesScreen';
 import {
+  enrichGroupMovieMetadata,
   loadRecommendationHistory,
   removeWatchNote,
   saveWatchNote,
@@ -43,6 +45,7 @@ jest.mock('../src/services/movies', () => ({
 }));
 
 jest.mock('../src/services/groupMovies', () => ({
+  enrichGroupMovieMetadata: jest.fn(),
   loadRecommendationHistory: jest.fn(),
   removeWatchNote: jest.fn(),
   saveWatchNote: jest.fn(),
@@ -82,6 +85,7 @@ beforeEach(() => {
   moviesSubscriptions.length = 0;
   noteSubscriptions.length = 0;
   jest.clearAllMocks();
+  jest.mocked(enrichGroupMovieMetadata).mockResolvedValue({ groupId: 'group-1', groupMovieId: 'tmdb_603', originalTitle: null, imdbId: null });
   jest.mocked(loadOlderMessages).mockResolvedValue({ messages: [], cursor: null, hasMore: false });
   jest.mocked(loadRecommendationHistory).mockResolvedValue([]);
   jest.mocked(saveWatchNote).mockResolvedValue({ groupId: 'group-1', groupMovieId: 'tmdb_603', removed: false });
@@ -161,6 +165,40 @@ describe('GroupMovieDetailScreen realtime watch notes', () => {
     expect(screen.queryByText('Updated after a rewatch')).toBeNull();
   });
 
+  it('shows the original title and an IMDb link when metadata is available', async () => {
+    render(<GroupMovieDetailScreen groupId="group-1" groupMovieId="tmdb_603" userId="viewer" onBack={jest.fn()} />);
+    await finishInitialLoad();
+    const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+
+    act(() => {
+      movieSubscriptions[0].onMovie({ ...movie(), originalTitle: 'Matriks', imdbId: 'tt0133093' });
+      noteSubscriptions[0].onNotes([]);
+    });
+
+    expect(screen.getByText('Original title')).toBeOnTheScreen();
+    expect(screen.getByText('Matriks (1999)')).toBeOnTheScreen();
+    expect(screen.getByText('English title: The Matrix')).toBeOnTheScreen();
+    fireEvent.press(screen.getByText('View on IMDb'));
+    expect(openURL).toHaveBeenCalledWith('https://www.imdb.com/title/tt0133093');
+    openURL.mockRestore();
+  });
+
+  it('falls back to the current title and requests metadata once when it is missing', async () => {
+    const view = render(<GroupMovieDetailScreen groupId="group-1" groupMovieId="tmdb_603" userId="viewer" onBack={jest.fn()} />);
+    await finishInitialLoad();
+
+    act(() => {
+      movieSubscriptions[0].onMovie(movie());
+      noteSubscriptions[0].onNotes([]);
+    });
+    view.rerender(<GroupMovieDetailScreen groupId="group-1" groupMovieId="tmdb_603" userId="viewer" onBack={jest.fn()} />);
+
+    expect(screen.getByText('The Matrix (1999)')).toBeOnTheScreen();
+    expect(screen.queryByText('View on IMDb')).toBeNull();
+    expect(enrichGroupMovieMetadata).toHaveBeenCalledTimes(1);
+    expect(enrichGroupMovieMetadata).toHaveBeenCalledWith('group-1', 'tmdb_603');
+  });
+
   it('keeps an in-progress edit when another watch-note snapshot arrives', async () => {
     render(<GroupMovieDetailScreen groupId="group-1" groupMovieId="tmdb_603" userId="viewer" onBack={jest.fn()} />);
     await finishInitialLoad();
@@ -214,8 +252,23 @@ describe('GroupMovieDetailScreen realtime watch notes', () => {
 });
 
 describe('GroupMoviesScreen realtime rating aggregates', () => {
+  it('renders localized movie-list controls and cycles sort labels', () => {
+    const onAddMovie = jest.fn();
+    render(<GroupMoviesScreen groupId="group-1" groupName="Weekend Watch" onBack={jest.fn()} onAddMovie={onAddMovie} onSelect={jest.fn()} />);
+
+    fireEvent.press(screen.getByText('+ Movie'));
+    expect(onAddMovie).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Sort: Rating')).toBeOnTheScreen();
+
+    fireEvent.press(screen.getByText('Sort: Rating'));
+    expect(screen.getByText('Sort: Date added')).toBeOnTheScreen();
+    fireEvent.press(screen.getByText('Sort: Date added'));
+    expect(screen.getByText('Sort: Watch notes')).toBeOnTheScreen();
+  });
+
   it('reflects rating creation, updates, and removal in the movie list', () => {
-    render(<GroupMoviesScreen groupId="group-1" onBack={jest.fn()} onSelect={jest.fn()} />);
+    render(<GroupMoviesScreen groupId="group-1" groupName="Weekend Watch" onBack={jest.fn()} onAddMovie={jest.fn()} onSelect={jest.fn()} />);
+    expect(screen.getByText('Weekend Watch')).toBeOnTheScreen();
     expect(screen.getByText(/This product uses the TMDB API but is not endorsed or certified by TMDB/)).toBeOnTheScreen();
     const onMovies = moviesSubscriptions[0].onMovies;
 

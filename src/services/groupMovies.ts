@@ -22,6 +22,8 @@ export type GroupMovie = {
   provider: 'tmdb';
   externalMovieId: string;
   title: string;
+  originalTitle?: string | null;
+  imdbId?: string | null;
   releaseYear: number | null;
   posterPath: string | null;
   overview: string | null;
@@ -73,6 +75,8 @@ const toGroupMovie = (snapshot: { id: string; data: () => DocumentData }): Group
     provider: 'tmdb',
     externalMovieId: data.externalMovieId,
     title: data.title,
+    originalTitle: nullableString(data.originalTitle),
+    imdbId: nullableString(data.imdbId),
     releaseYear: typeof data.releaseYear === 'number' ? data.releaseYear : null,
     posterPath: nullableString(data.posterPath),
     overview: nullableString(data.overview),
@@ -145,6 +149,20 @@ export const subscribeToGroupMovie = (
 export const loadRecommendationHistory = async (groupId: string, groupMovieId: string): Promise<RecommendationHistoryItem[]> => {
   const snapshot = await getDocs(query(historyCollection(groupId, groupMovieId), orderBy('createdAt', 'desc'), limit(100)));
   return snapshot.docs.map(toRecommendationHistory).filter((item): item is RecommendationHistoryItem => item !== null);
+};
+
+export const getWatchNoteCount = async (groupId: string, groupMovieId: string): Promise<number> => {
+  const snapshot = await getDocs(watchNotesCollection(groupId, groupMovieId));
+  return snapshot.size;
+};
+
+export const enrichGroupMovieMetadata = async (groupId: string, groupMovieId: string) => {
+  const callable = httpsCallable<
+    { groupId: string; groupMovieId: string },
+    { groupId: string; groupMovieId: string; originalTitle: string | null; imdbId: string | null }
+  >(functions, 'enrichGroupMovieMetadata');
+  const response = await callable({ groupId, groupMovieId });
+  return response.data;
 };
 
 export const loadWatchNotes = async (groupId: string, groupMovieId: string): Promise<WatchNote[]> => {

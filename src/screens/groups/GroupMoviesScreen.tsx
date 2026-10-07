@@ -1,14 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Image, Pressable, Text, View, StyleSheet } from 'react-native';
 import { TmdbAttribution } from '../../components/TmdbAttribution';
 import { useLocale } from '../../i18n';
-import { type GroupMovie, subscribeToGroupMovies } from '../../services/groupMovies';
+import { getWatchNoteCount, type GroupMovie, subscribeToGroupMovies } from '../../services/groupMovies';
 
-export function GroupMoviesScreen({ groupId, onBack, onSelect }: { groupId: string; onBack: () => void; onSelect: (movie: GroupMovie) => void }) {
+type SortMode = 'rating' | 'date' | 'watchNotes';
+
+export function GroupMoviesScreen({ groupId, groupName, onBack, onAddMovie, onSelect }: { groupId: string; groupName: string; onBack: () => void; onAddMovie: () => void; onSelect: (movie: GroupMovie) => void }) {
   const { t } = useLocale();
   const [movies, setMovies] = useState<GroupMovie[]>([]);
+  const [watchNoteCounts, setWatchNoteCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sortMode, setSortMode] = useState<SortMode>('rating');
 
   useEffect(() => {
     const unsubscribe = subscribeToGroupMovies(
@@ -19,12 +23,52 @@ export function GroupMoviesScreen({ groupId, onBack, onSelect }: { groupId: stri
     return unsubscribe;
   }, [groupId, t]);
 
+  useEffect(() => {
+    if (movies.length === 0) { setWatchNoteCounts({}); return; }
+    let active = true;
+    void Promise.all(movies.map(async (movie) => ({ movieId: movie.id, count: await getWatchNoteCount(groupId, movie.id) })))
+      .then((counts) => {
+        if (!active) return;
+        setWatchNoteCounts(Object.fromEntries(counts.map(({ movieId, count }) => [movieId, count])));
+      })
+      .catch(() => { if (active) setWatchNoteCounts({}); });
+    return () => { active = false; };
+  }, [groupId, movies]);
+
+  const cycleSort = () => {
+    setSortMode((current) => current === 'rating' ? 'date' : current === 'date' ? 'watchNotes' : 'rating');
+  };
+
+  const sortedMovies = useMemo(() => {
+    const nextMovies = [...movies];
+    nextMovies.sort((left, right) => {
+      switch (sortMode) {
+        case 'date':
+          return (right.lastRecommendedAt?.toMillis() ?? 0) - (left.lastRecommendedAt?.toMillis() ?? 0)
+            || (right.ratingAverage ?? -1) - (left.ratingAverage ?? -1)
+            || right.recommendationCount - left.recommendationCount;
+        case 'watchNotes':
+          return (watchNoteCounts[right.id] ?? 0) - (watchNoteCounts[left.id] ?? 0)
+            || (right.lastRecommendedAt?.toMillis() ?? 0) - (left.lastRecommendedAt?.toMillis() ?? 0);
+        case 'rating':
+        default:
+          return (right.ratingAverage ?? -1) - (left.ratingAverage ?? -1)
+            || right.ratingCount - left.ratingCount
+            || (right.lastRecommendedAt?.toMillis() ?? 0) - (left.lastRecommendedAt?.toMillis() ?? 0);
+      }
+    });
+    return nextMovies;
+  }, [movies, sortMode, watchNoteCounts]);
+
+  const sortLabel = sortMode === 'rating' ? t('sortRating') : sortMode === 'date' ? t('sortDateAdded') : t('sortWatchNotes');
+
   return <View style={styles.container}>
-    <View style={styles.header}><Pressable onPress={onBack}><Text style={styles.action}>{t('chat')}</Text></Pressable><Text style={styles.title}>{t('movies')}</Text><View style={styles.headerSpacer} /></View>
+    <View style={styles.header}><Pressable onPress={onBack}><Text style={styles.action}>{t('chat')}</Text></Pressable><View style={styles.headerTitle}><Text style={styles.title}>{groupName}</Text><Text style={styles.subtitle}>{t('movies')}</Text></View><Pressable onPress={onAddMovie}><Text style={styles.action}>{t('addMovie')}</Text></Pressable></View>
+    <View style={styles.sortRow}><Pressable onPress={cycleSort} style={styles.sortButton}><Text style={styles.sortText}>{`${t('sortBy')}: ${sortLabel}`}</Text></Pressable></View>
     {loading ? <ActivityIndicator /> : error ? <Text style={styles.status}>{error}</Text> : <FlatList
-      data={movies}
+      data={sortedMovies}
       keyExtractor={(movie) => movie.id}
-      contentContainerStyle={movies.length === 0 ? styles.emptyList : styles.list}
+      contentContainerStyle={sortedMovies.length === 0 ? styles.emptyList : styles.list}
       ListEmptyComponent={<Text style={styles.status}>{t('noMoviesYet')}</Text>}
       renderItem={({ item }) => <Pressable onPress={() => onSelect(item)} style={styles.row}>
         {item.posterPath ? <Image source={{ uri: `https://image.tmdb.org/t/p/w185${item.posterPath}` }} style={styles.poster} /> : <View style={styles.posterFallback}><Text style={styles.posterFallbackText}>Film</Text></View>}
@@ -37,10 +81,14 @@ export function GroupMoviesScreen({ groupId, onBack, onSelect }: { groupId: stri
 
 const styles = StyleSheet.create({
   container: { backgroundColor: '#F5F1E8', flex: 1, padding: 16 },
-  header: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingBottom: 16 },
-  title: { color: '#17313B', fontSize: 24, fontWeight: '800' },
+  header: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingBottom: 8 },
+  headerTitle: { alignItems: 'center', flex: 1, paddingHorizontal: 8 },
+  title: { color: '#17313B', fontSize: 22, fontWeight: '800', textAlign: 'center' },
+  subtitle: { color: '#52656B', fontSize: 12, fontWeight: '700', marginTop: 2 },
   action: { color: '#C05640', fontWeight: '800', padding: 10 },
-  headerSpacer: { width: 54 },
+  sortRow: { marginBottom: 12 },
+  sortButton: { alignSelf: 'flex-start', backgroundColor: '#FFFFFF', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 },
+  sortText: { color: '#17313B', fontWeight: '700' },
   list: { gap: 10 },
   emptyList: { flexGrow: 1, justifyContent: 'center' },
   row: { alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 12, flexDirection: 'row', gap: 12, padding: 10 },

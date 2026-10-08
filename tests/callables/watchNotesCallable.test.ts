@@ -1,5 +1,5 @@
 import { getFirestore } from '../../functions/node_modules/firebase-admin/lib/firestore/index.js';
-import { enrichGroupMovieMetadata as enrichGroupMovieMetadataCallable, recommendMovie, saveWatchNote } from '../../functions/src/index';
+import { enrichGroupMovieMetadata as enrichGroupMovieMetadataCallable, recommendMovie, saveWatchNote, setMovieSeenStatus } from '../../functions/src/index';
 import * as tmdbModule from '../../functions/src/tmdb';
 
 const firestore = getFirestore();
@@ -214,5 +214,68 @@ describe('enrichGroupMovieMetadata callable', () => {
 
     await expect(callEnrichMetadata('inactive-metadata-user')).rejects.toMatchObject({ code: 'permission-denied' });
     expect(tmdbModule.getTmdbMovie).not.toHaveBeenCalled();
+  });
+});
+
+describe('setMovieSeenStatus callable', () => {
+  const seenUserId = 'movie-seen-status-user';
+  const firstGroupId = 'movie-seen-status-group-one';
+  const secondGroupId = 'movie-seen-status-group-two';
+  const canonicalMovieId = 'tmdb_603';
+  const statusReference = firestore.doc(`users/${seenUserId}/movieSeenStatuses/${canonicalMovieId}`);
+
+  const callSetStatus = (groupId: string, groupMovieId = canonicalMovieId, seen: unknown = true, uid: string | null = seenUserId) => setMovieSeenStatus.run({
+    data: { groupId, groupMovieId, seen },
+    auth: uid ? { uid } : null,
+  } as unknown as Parameters<typeof setMovieSeenStatus.run>[0]);
+
+  beforeAll(async () => {
+    for (const groupId of [firstGroupId, secondGroupId]) {
+      await firestore.doc(`groups/${groupId}`).set({ name: groupId });
+      await firestore.doc(`groups/${groupId}/members/${seenUserId}`).set({ status: 'active' });
+      await firestore.doc(`groups/${groupId}/groupMovies/${canonicalMovieId}`).set({
+        provider: 'tmdb', externalMovieId: '603', title: 'The Matrix',
+      });
+    }
+  });
+
+  afterEach(async () => {
+    await statusReference.delete();
+  });
+
+  afterAll(async () => {
+    for (const groupId of [firstGroupId, secondGroupId]) {
+      await firestore.doc(`groups/${groupId}/groupMovies/${canonicalMovieId}`).delete();
+      await firestore.doc(`groups/${groupId}/groupMovies/wrong-key`).delete();
+      await firestore.doc(`groups/${groupId}/members/${seenUserId}`).delete();
+      await firestore.doc(`groups/${groupId}/members/inactive-seen-user`).delete();
+      await firestore.doc(`groups/${groupId}`).delete();
+    }
+    await firestore.doc(`users/${seenUserId}`).delete();
+  });
+
+  it('persists the same personal status across groups for the canonical movie ID', async () => {
+    await callSetStatus(firstGroupId, canonicalMovieId, true);
+    expect((await statusReference.get()).data()).toMatchObject({ provider: 'tmdb', externalMovieId: '603', seen: true });
+
+    await callSetStatus(secondGroupId, canonicalMovieId, false);
+    expect((await statusReference.get()).data()).toMatchObject({ provider: 'tmdb', externalMovieId: '603', seen: false });
+  });
+
+  it('rejects unauthenticated requests, invalid status values, inactive members, and mismatched movie IDs', async () => {
+    await expect(callSetStatus(firstGroupId, canonicalMovieId, true, null)).rejects.toMatchObject({ code: 'unauthenticated' });
+    await expect(callSetStatus(firstGroupId, canonicalMovieId, 'yes')).rejects.toMatchObject({ code: 'invalid-argument' });
+
+    await firestore.doc(`groups/${firstGroupId}/members/inactive-seen-user`).set({ status: 'left' });
+    await expect(callSetStatus(firstGroupId, canonicalMovieId, true, 'inactive-seen-user')).rejects.toMatchObject({ code: 'permission-denied' });
+
+    await firestore.doc(`groups/${firstGroupId}/groupMovies/wrong-key`).set({ provider: 'tmdb', externalMovieId: '603', title: 'The Matrix' });
+    await expect(callSetStatus(firstGroupId, 'wrong-key', true)).rejects.toMatchObject({ code: 'failed-precondition' });
+    expect((await statusReference.get()).exists).toBe(false);
+  });
+
+  it('rejects movies that are not present in the selected group', async () => {
+    await expect(callSetStatus(firstGroupId, 'tmdb_550', true)).rejects.toMatchObject({ code: 'not-found' });
+    expect((await statusReference.get()).exists).toBe(false);
   });
 });

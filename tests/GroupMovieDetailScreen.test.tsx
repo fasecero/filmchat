@@ -14,20 +14,21 @@ import {
   type GroupMovie,
   type WatchNote,
 } from '../src/services/groupMovies';
+import { setMovieSeenStatus, subscribeToMovieSeenStatus } from '../src/services/movieSeenStatus';
 import {
   loadOlderMessages,
-  normalizeMessageText,
-  sendTextMessage,
   subscribeToLatestMessages,
 } from '../src/services/messages';
 
 type MovieCallback = (movie: GroupMovie | null) => void;
 type MoviesCallback = (movies: GroupMovie[]) => void;
 type NotesCallback = (notes: WatchNote[]) => void;
+type SeenCallback = (status: { seen: boolean }) => void;
 
 const movieSubscriptions: { groupId: string; groupMovieId: string; onMovie: MovieCallback; unsubscribe: jest.Mock }[] = [];
 const moviesSubscriptions: { groupId: string; onMovies: MoviesCallback; unsubscribe: jest.Mock }[] = [];
 const noteSubscriptions: { groupId: string; groupMovieId: string; onNotes: NotesCallback; unsubscribe: jest.Mock }[] = [];
+const seenSubscriptions: { userId: string; groupMovieId: string; onStatus: SeenCallback; unsubscribe: jest.Mock }[] = [];
 
 jest.mock('../src/services/auth', () => ({
   signOutUser: jest.fn(),
@@ -54,6 +55,11 @@ jest.mock('../src/services/groupMovies', () => ({
   subscribeToWatchNotes: jest.fn(),
   MAX_WATCH_NOTE_PLATFORM_LENGTH: 80,
   MAX_WATCH_NOTE_REVIEW_LENGTH: 1000,
+}));
+
+jest.mock('../src/services/movieSeenStatus', () => ({
+  setMovieSeenStatus: jest.fn(),
+  subscribeToMovieSeenStatus: jest.fn(),
 }));
 
 jest.mock('../src/services/messages', () => ({
@@ -84,12 +90,14 @@ beforeEach(() => {
   movieSubscriptions.length = 0;
   moviesSubscriptions.length = 0;
   noteSubscriptions.length = 0;
+  seenSubscriptions.length = 0;
   jest.clearAllMocks();
   jest.mocked(enrichGroupMovieMetadata).mockResolvedValue({ groupId: 'group-1', groupMovieId: 'tmdb_603', originalTitle: null, imdbId: null });
   jest.mocked(loadOlderMessages).mockResolvedValue({ messages: [], cursor: null, hasMore: false });
   jest.mocked(loadRecommendationHistory).mockResolvedValue([]);
   jest.mocked(saveWatchNote).mockResolvedValue({ groupId: 'group-1', groupMovieId: 'tmdb_603', removed: false });
   jest.mocked(removeWatchNote).mockResolvedValue({ groupId: 'group-1', groupMovieId: 'tmdb_603', removed: true });
+  jest.mocked(setMovieSeenStatus).mockImplementation(async (groupId, groupMovieId, seen) => ({ groupId, groupMovieId, seen }));
   jest.mocked(subscribeToLatestMessages).mockReturnValue(jest.fn());
   jest.mocked(subscribeToGroupMovie).mockImplementation((groupId, groupMovieId, onMovie) => {
     const unsubscribe = jest.fn();
@@ -105,6 +113,12 @@ beforeEach(() => {
   jest.mocked(subscribeToWatchNotes).mockImplementation((groupId, groupMovieId, onNotes) => {
     const unsubscribe = jest.fn();
     noteSubscriptions.push({ groupId, groupMovieId, onNotes, unsubscribe });
+    return unsubscribe;
+  });
+  jest.mocked(subscribeToMovieSeenStatus).mockImplementation((userId, groupMovieId, onStatus) => {
+    const unsubscribe = jest.fn();
+    seenSubscriptions.push({ userId, groupMovieId, onStatus, unsubscribe });
+    onStatus({ seen: false });
     return unsubscribe;
   });
 });
@@ -140,6 +154,10 @@ describe('GroupMovieDetailScreen realtime watch notes', () => {
       notesListener([]);
     });
     expect(screen.getByText('No member notes yet.')).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Mark as seen' })).toBeOnTheScreen();
+    await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'Mark as seen' })); });
+    expect(setMovieSeenStatus).toHaveBeenCalledWith('group-1', 'tmdb_603', true);
+    expect(await screen.findByRole('button', { name: 'Mark as unseen' })).toBeOnTheScreen();
 
     act(() => {
       movieListener(movie(1, 5));
@@ -254,7 +272,7 @@ describe('GroupMovieDetailScreen realtime watch notes', () => {
 describe('GroupMoviesScreen realtime rating aggregates', () => {
   it('renders localized movie-list controls and cycles sort labels', () => {
     const onAddMovie = jest.fn();
-    render(<GroupMoviesScreen groupId="group-1" groupName="Weekend Watch" onBack={jest.fn()} onAddMovie={onAddMovie} onSelect={jest.fn()} />);
+    render(<GroupMoviesScreen groupId="group-1" groupName="Weekend Watch" userId="viewer" onBack={jest.fn()} onAddMovie={onAddMovie} onSelect={jest.fn()} />);
 
     fireEvent.press(screen.getByText('+ Movie'));
     expect(onAddMovie).toHaveBeenCalledTimes(1);
@@ -267,7 +285,7 @@ describe('GroupMoviesScreen realtime rating aggregates', () => {
   });
 
   it('reflects rating creation, updates, and removal in the movie list', () => {
-    render(<GroupMoviesScreen groupId="group-1" groupName="Weekend Watch" onBack={jest.fn()} onAddMovie={jest.fn()} onSelect={jest.fn()} />);
+    render(<GroupMoviesScreen groupId="group-1" groupName="Weekend Watch" userId="viewer" onBack={jest.fn()} onAddMovie={jest.fn()} onSelect={jest.fn()} />);
     expect(screen.getByText('Weekend Watch')).toBeOnTheScreen();
     expect(screen.getByText(/This product uses the TMDB API but is not endorsed or certified by TMDB/)).toBeOnTheScreen();
     const onMovies = moviesSubscriptions[0].onMovies;
@@ -285,5 +303,19 @@ describe('GroupMoviesScreen realtime rating aggregates', () => {
 
     act(() => onMovies([movie()]));
     expect(screen.queryByText(/average from/)).toBeNull();
+  });
+
+  it('toggles a movie seen status without opening its detail', async () => {
+    const onSelect = jest.fn();
+    render(<GroupMoviesScreen groupId="group-1" groupName="Weekend Watch" userId="viewer" onBack={jest.fn()} onAddMovie={jest.fn()} onSelect={onSelect} />);
+    act(() => moviesSubscriptions[0].onMovies([movie()]));
+
+    expect(seenSubscriptions[0]).toMatchObject({ userId: 'viewer', groupMovieId: 'tmdb_603' });
+    await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'Mark as seen' })); });
+    expect(setMovieSeenStatus).toHaveBeenCalledWith('group-1', 'tmdb_603', true);
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(await screen.findByRole('button', { name: 'Mark as unseen' })).toBeOnTheScreen();
+    await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'Mark as unseen' })); });
+    expect(setMovieSeenStatus).toHaveBeenLastCalledWith('group-1', 'tmdb_603', false);
   });
 });

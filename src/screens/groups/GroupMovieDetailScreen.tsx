@@ -15,6 +15,7 @@ import {
   type RecommendationHistoryItem,
   type WatchNote,
 } from '../../services/groupMovies';
+import { setMovieSeenStatus, subscribeToMovieSeenStatus } from '../../services/movieSeenStatus';
 
 export function GroupMovieDetailScreen({ groupId, groupMovieId, userId, onBack }: { groupId: string; groupMovieId: string; userId: string; onBack: () => void }) {
   const { t } = useLocale();
@@ -31,6 +32,9 @@ export function GroupMovieDetailScreen({ groupId, groupMovieId, userId, onBack }
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [seen, setSeen] = useState(false);
+  const [savingSeen, setSavingSeen] = useState(false);
+  const [seenError, setSeenError] = useState<string | null>(null);
 
   const applyMovie = useCallback((nextMovie: GroupMovie | null) => {
     if (!nextMovie) { setError(t('noMovieAvailable')); return; }
@@ -59,6 +63,17 @@ export function GroupMovieDetailScreen({ groupId, groupMovieId, userId, onBack }
     const readyTimer = setTimeout(markReady, 0);
     return () => { active = false; clearTimeout(readyTimer); unsubscribeMovie(); unsubscribeNotes(); };
   }, [groupId, groupMovieId, applyMovie, applyNotes, t]);
+
+  useEffect(() => {
+    let active = true;
+    const unsubscribe = subscribeToMovieSeenStatus(
+      userId,
+      groupMovieId,
+      (status) => { if (active) setSeen(status.seen); },
+      () => { if (active) setSeenError(t('loadSeenStatusError')); },
+    );
+    return () => { active = false; unsubscribe(); };
+  }, [userId, groupMovieId, t]);
 
   useEffect(() => {
     if (!movie || movie.id !== groupMovieId || (movie.originalTitle && movie.imdbId)) return;
@@ -93,6 +108,20 @@ export function GroupMovieDetailScreen({ groupId, groupMovieId, userId, onBack }
     finally { setSaving(false); }
   };
 
+  const toggleSeen = async () => {
+    const nextSeen = !seen;
+    setSavingSeen(true);
+    setSeenError(null);
+    try {
+      await setMovieSeenStatus(groupId, groupMovieId, nextSeen);
+      setSeen(nextSeen);
+    } catch {
+      setSeenError(t('saveSeenStatusError'));
+    } finally {
+      setSavingSeen(false);
+    }
+  };
+
   const imdbUrl = movie?.imdbId ? `https://www.imdb.com/title/${movie.imdbId}` : null;
 
   return <View style={styles.container}>
@@ -105,6 +134,17 @@ export function GroupMovieDetailScreen({ groupId, groupMovieId, userId, onBack }
         {movie.originalTitle && movie.originalTitle !== movie.title ? <Text style={styles.secondaryTitle}>{t('englishTitle')}: {movie.title}</Text> : null}
         <Text style={styles.meta}>{movie.recommendationCount} {movie.recommendationCount === 1 ? t('recommendationCountOne') : t('recommendationCountMany')}</Text>
         <Text style={styles.meta}>{movie.ratingAverage === null ? t('noRatingsYet') : `${movie.ratingAverage.toFixed(1)} ${t('averageFromCount')} ${movie.ratingCount} ${movie.ratingCount === 1 ? t('recommendationCountOne') : t('recommendationCountMany')}`}</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={savingSeen ? t('saving') : seen ? t('markUnseen') : t('markSeen')}
+          accessibilityState={{ selected: seen, disabled: savingSeen }}
+          disabled={savingSeen}
+          onPress={() => void toggleSeen()}
+          style={styles.seenButton}
+        >
+          {savingSeen ? <ActivityIndicator size="small" color="#28705C" /> : <Text style={seen ? styles.seenIconSelected : styles.seenIcon}>{seen ? '✓' : '○'}</Text>}
+        </Pressable>
+        {seenError ? <Text style={styles.error}>{seenError}</Text> : null}
         {imdbUrl ? <Pressable accessibilityRole="link" onPress={() => void Linking.openURL(imdbUrl)} style={styles.imdbButton}><Text style={styles.imdbText}>{t('viewOnImdb')}</Text></Pressable> : null}
         {movie.overview ? <Text style={styles.overview}>{movie.overview}</Text> : null}
       </View>
@@ -136,6 +176,8 @@ const styles = StyleSheet.create({
   title: { color: '#17313B', fontSize: 24, fontWeight: '800' }, action: { color: '#C05640', fontWeight: '800', padding: 10 }, headerSpacer: { width: 54 },
   content: { gap: 12, paddingBottom: 24 }, summary: { alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 12, gap: 6, padding: 16 },
   poster: { borderRadius: 8, height: 220, width: 148 }, posterFallback: { alignItems: 'center', backgroundColor: '#D5DFDA', borderRadius: 8, height: 220, justifyContent: 'center', width: 148 }, posterFallbackText: { color: '#52656B', fontSize: 14, fontWeight: '700' },
+  seenButton: { alignItems: 'center', borderRadius: 18, height: 36, justifyContent: 'center', marginTop: 4, width: 36 },
+  seenIcon: { color: '#879493', fontSize: 23, fontWeight: '500', lineHeight: 28 }, seenIconSelected: { color: '#28705C', fontSize: 22, fontWeight: '800', lineHeight: 28 },
   titleLabel: { color: '#52656B', fontSize: 12, fontWeight: '700', textAlign: 'center' }, movieTitle: { color: '#17313B', fontSize: 20, fontWeight: '800', textAlign: 'center' }, secondaryTitle: { color: '#52656B', fontSize: 13, textAlign: 'center' }, meta: { color: '#52656B', fontSize: 13 }, overview: { color: '#52656B', lineHeight: 20, marginTop: 6 }, imdbButton: { backgroundColor: '#F2D9C9', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 }, imdbText: { color: '#7B442E', fontWeight: '800' },
   editor: { backgroundColor: '#FFFFFF', borderRadius: 12, gap: 8, padding: 16 }, sectionHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' }, sectionTitle: { color: '#17313B', fontSize: 18, fontWeight: '800', marginTop: 8 }, label: { color: '#52656B', fontSize: 13, fontWeight: '700' },
   stars: { flexDirection: 'row', gap: 8 }, star: { color: '#B8C1BC', fontSize: 32 }, starSelected: { color: '#C05640', fontSize: 32 }, starsText: { color: '#C05640', fontSize: 18 }, input: { borderColor: '#D5DFDA', borderRadius: 8, borderWidth: 1, color: '#17313B', padding: 10 }, reviewInput: { minHeight: 72, textAlignVertical: 'top' }, error: { color: '#A13A2A', fontSize: 13 },

@@ -122,3 +122,18 @@ it('allows active members to read movie history but denies client movie writes',
     authorId: 'owner',
   })).rejects.toThrow();
 });
+
+it('allows only the owner to read movie seen statuses and denies client writes', async () => {
+  const owner = testEnvironment.authenticatedContext('owner').firestore();
+  const stranger = testEnvironment.authenticatedContext('stranger').firestore();
+  const statusPath = 'users/owner/movieSeenStatuses/tmdb_603';
+
+  await testEnvironment.withSecurityRulesDisabled(async (context) => {
+    await context.firestore().doc(statusPath).set({ provider: 'tmdb', externalMovieId: '603', seen: true });
+  });
+
+  await expect(owner.doc(statusPath).get()).resolves.toBeDefined();
+  await expect(stranger.doc(statusPath).get()).rejects.toThrow();
+  await expect(owner.doc(statusPath).set({ provider: 'tmdb', externalMovieId: '603', seen: false })).rejects.toThrow();
+  await expect(owner.doc(statusPath).update({ seen: false })).rejects.toThrow();
+});

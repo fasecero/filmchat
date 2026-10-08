@@ -34,6 +34,10 @@ jest.mock('../src/services/groupMovies', () => ({
   loadGroupMovie: jest.fn(),
   loadRecommendationHistory: jest.fn(),
 }));
+jest.mock('../src/services/movieSeenStatus', () => ({
+  setMovieSeenStatus: jest.fn(),
+  subscribeToMovieSeenStatus: jest.fn(),
+}));
 jest.mock('../src/services/pendingInvite', () => ({
   getPendingInvite: jest.fn().mockResolvedValue(null),
   savePendingInvite: jest.fn(),

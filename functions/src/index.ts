@@ -526,3 +526,45 @@ export const saveWatchNote = onCall(async (request) => {
 
 	return { groupId, groupMovieId: groupMovieIdValue, removed: remove };
 });
+
+export const setMovieSeenStatus = onCall(async (request) => {
+	const uid = requireAuth(request);
+	const groupId = requireString(request.data?.groupId, 'Group ID');
+	const groupMovieIdValue = requireString(request.data?.groupMovieId, 'Group movie ID');
+	const seen = request.data?.seen;
+	if (typeof seen !== 'boolean') {
+		throw new HttpsError('invalid-argument', 'Seen status must be a boolean.');
+	}
+
+	const groupRef = firestore.collection('groups').doc(groupId);
+	const memberRef = groupRef.collection('members').doc(uid);
+	const groupMovieRef = groupRef.collection('groupMovies').doc(groupMovieIdValue);
+	const statusRef = firestore.collection('users').doc(uid).collection('movieSeenStatuses').doc(groupMovieIdValue);
+
+	await firestore.runTransaction(async (transaction) => {
+		const [memberSnapshot, movieSnapshot] = await Promise.all([
+			transaction.get(memberRef),
+			transaction.get(groupMovieRef),
+		]);
+		if (!memberSnapshot.exists || memberSnapshot.data()?.status !== 'active') {
+			throw new HttpsError('permission-denied', 'Active group membership is required.');
+		}
+		if (!movieSnapshot.exists) {
+			throw new HttpsError('not-found', 'The group movie was not found.');
+		}
+		const movie = movieSnapshot.data();
+		if (movie?.provider !== 'tmdb' || typeof movie.externalMovieId !== 'string'
+			|| groupMovieIdValue !== `tmdb_${movie.externalMovieId}`) {
+			throw new HttpsError('failed-precondition', 'The group movie has invalid catalog metadata.');
+		}
+
+		transaction.set(statusRef, {
+			provider: movie.provider,
+			externalMovieId: movie.externalMovieId,
+			seen,
+			updatedAt: FieldValue.serverTimestamp(),
+		});
+	});
+
+	return { groupId, groupMovieId: groupMovieIdValue, seen };
+});

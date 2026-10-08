@@ -87,6 +87,11 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /users/{userId}/movieSeenStatuses/{movieId} {
+      allow read: if isUser(userId);
+      allow write: if false;
+    }
+
     match /users/{userId}/groups/{groupId} {
       allow read: if isUser(userId);
       allow create: if isUser(userId)

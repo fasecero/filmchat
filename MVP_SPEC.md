@@ -136,6 +136,8 @@ When the same catalog movie is recommended again in the same group, create a new
 
 - Search returns catalog results and must have debouncing (about 300 ms), loading, empty, and retry states.
 - Only a result selected from the server-proxied catalog search can be recommended. Free-form movie creation is out of scope.
+- Each user can mark a movie seen or unseen. This personal status is keyed by the canonical catalog movie ID and follows the same movie across groups; it is independent of group watch notes and recommendation-inbox seen state.
+- The movie list and movie detail expose a toggle for the current user's seen status. A movie without a saved status is unseen.
 - Any active member may create one watch note per persistent group movie. It has an optional 1–5-star rating, optional review text of up to 1,000 characters, and optional watched-on platform/medium of up to 80 characters.
 - At least one of rating, review text, or watched-on platform/medium is required to save a watch note. This lets someone record where they watched without being forced to score or review it.
 - A member may update or remove only their own watch note. Removing it removes all of its fields.

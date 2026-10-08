@@ -16,7 +16,7 @@
 - [ ] User-scoped recommendation index
       General infrastructure for personal recommendation data.
 
-- [ ] Explicit user-level "seen" state
+- [x] Explicit user-level "seen" state, shared across groups for each movie
 
 - [ ] "Movies I recommended"
 
@@ -26,18 +26,18 @@
 
 ## Movie discovery
 
-- [ ] Movie-list sorting
+- [x] Movie-list sorting
 
 - [ ] Movie-list filters
 
 - [ ] TMDB rating
 
-- [ ] IMDb link
+- [x] IMDb link
 
 ## UX / Product
 
 - [ ] WhatsApp-like UI polish
 
-- [ ] i18n / Spanish
+- [x] i18n / Spanish
 
 - [ ] Google Sign-In

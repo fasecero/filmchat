@@ -177,7 +177,7 @@ export function GroupDetailScreen({ group, userId, displayName, onBack, onLeft }
     } },
   ]);
   if (selectedMovieId) return <GroupMovieDetailScreen groupId={group.id} groupMovieId={selectedMovieId} userId={userId} onBack={() => setSelectedMovieId(null)} />;
-  if (section === 'movies') return <GroupMoviesScreen groupId={group.id} groupName={group.name} onBack={() => setSection('chat')} onAddMovie={() => { setSection('chat'); setMovieMode('search'); setMovieQuery(''); setMovieError(null); }} onSelect={(movie) => setSelectedMovieId(movie.id)} />;
+  if (section === 'movies') return <GroupMoviesScreen groupId={group.id} groupName={group.name} userId={userId} onBack={() => setSection('chat')} onAddMovie={() => { setSection('chat'); setMovieMode('search'); setMovieQuery(''); setMovieError(null); }} onSelect={(movie) => setSelectedMovieId(movie.id)} />;
   return <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
     <View style={styles.header}><Button label={t('back')} onPress={onBack} secondary /><View style={styles.headerTitle}><Text style={styles.title}>{group.name}</Text><Text style={styles.subtitle}>{t('privateConversation')}</Text></View><Pressable onPress={() => setSection('movies')}><Text style={styles.headerAction}>{t('movies')}</Text></Pressable><Pressable onPress={() => void shareInvite()}><Text style={styles.headerAction}>{t('share')}</Text></Pressable></View>
     {error ? <Text style={styles.error}>{error}</Text> : null}{leaveError ? <Text style={styles.error}>{leaveError}</Text> : null}

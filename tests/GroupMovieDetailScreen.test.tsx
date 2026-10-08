@@ -398,6 +398,18 @@ describe('GroupMoviesScreen realtime rating aggregates', () => {
     expect(screen.queryByText(/average from/)).toBeNull();
   });
 
+  it('shows the original title in the list and falls back to the catalog title', () => {
+    render(<GroupMoviesScreen groupId="group-1" groupName="Weekend Watch" userId="viewer" onBack={jest.fn()} onAddMovie={jest.fn()} onSelect={jest.fn()} />);
+    const onMovies = moviesSubscriptions[0].onMovies;
+
+    act(() => onMovies([{ ...movie(), originalTitle: 'Matriks' }]));
+    expect(screen.getByText('Matriks (1999)')).toBeOnTheScreen();
+    expect(screen.queryByText('The Matrix (1999)')).toBeNull();
+
+    act(() => onMovies([movie()]));
+    expect(screen.getByText('The Matrix (1999)')).toBeOnTheScreen();
+  });
+
   it('toggles a movie seen status without opening its detail', async () => {
     const onSelect = jest.fn();
     render(<GroupMoviesScreen groupId="group-1" groupName="Weekend Watch" userId="viewer" onBack={jest.fn()} onAddMovie={jest.fn()} onSelect={onSelect} />);

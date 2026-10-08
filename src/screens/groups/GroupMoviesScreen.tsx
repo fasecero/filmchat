@@ -102,7 +102,7 @@ export function GroupMoviesScreen({ groupId, groupName, userId, onBack, onAddMov
       renderItem={({ item }) => <View style={styles.row}>
         <Pressable accessibilityRole="button" onPress={() => onSelect(item)} style={styles.movieRowContent}>
           {item.posterPath ? <Image source={{ uri: `https://image.tmdb.org/t/p/w185${item.posterPath}` }} style={styles.poster} /> : <View style={styles.posterFallback}><Text style={styles.posterFallbackText}>Film</Text></View>}
-          <View style={styles.info}><Text style={styles.movieTitle}>{item.title}{item.releaseYear ? ` (${item.releaseYear})` : ''}</Text><Text style={styles.meta}>{item.recommendationCount} {item.recommendationCount === 1 ? t('recommendationCountOne') : t('recommendationCountMany')}</Text>{item.ratingCount > 0 ? <Text style={styles.meta}>{item.ratingAverage?.toFixed(1)} {t('averageFrom')} {item.ratingCount}</Text> : null}</View>
+          <View style={styles.info}><Text style={styles.movieTitle}>{item.originalTitle || item.title}{item.releaseYear ? ` (${item.releaseYear})` : ''}</Text><Text style={styles.meta}>{item.recommendationCount} {item.recommendationCount === 1 ? t('recommendationCountOne') : t('recommendationCountMany')}</Text>{item.ratingCount > 0 ? <Text style={styles.meta}>{item.ratingAverage?.toFixed(1)} {t('averageFrom')} {item.ratingCount}</Text> : null}</View>
         </Pressable>
         <Pressable
           accessibilityRole="button"

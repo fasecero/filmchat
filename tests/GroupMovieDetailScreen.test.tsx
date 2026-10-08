@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
-import { Linking } from 'react-native';
+import { Alert, Linking } from 'react-native';
 import { GroupDetailScreen } from '../src/screens/groups/GroupDetailScreen';
 import { GroupMovieDetailScreen } from '../src/screens/groups/GroupMovieDetailScreen';
 import { GroupMoviesScreen } from '../src/screens/groups/GroupMoviesScreen';
@@ -12,12 +12,15 @@ import {
   subscribeToGroupMovies,
   subscribeToWatchNotes,
   type GroupMovie,
+  type RecommendationHistoryItem,
   type WatchNote,
 } from '../src/services/groupMovies';
 import { setMovieSeenStatus, subscribeToMovieSeenStatus } from '../src/services/movieSeenStatus';
 import {
+  deleteMovieRecommendation,
   loadOlderMessages,
   subscribeToLatestMessages,
+  type Message,
 } from '../src/services/messages';
 
 type MovieCallback = (movie: GroupMovie | null) => void;
@@ -29,6 +32,7 @@ const movieSubscriptions: { groupId: string; groupMovieId: string; onMovie: Movi
 const moviesSubscriptions: { groupId: string; onMovies: MoviesCallback; unsubscribe: jest.Mock }[] = [];
 const noteSubscriptions: { groupId: string; groupMovieId: string; onNotes: NotesCallback; unsubscribe: jest.Mock }[] = [];
 const seenSubscriptions: { userId: string; groupMovieId: string; onStatus: SeenCallback; unsubscribe: jest.Mock }[] = [];
+const messageSubscriptions: { groupId: string; onMessages: (messages: Message[]) => void; unsubscribe: jest.Mock }[] = [];
 
 jest.mock('../src/services/auth', () => ({
   signOutUser: jest.fn(),
@@ -63,6 +67,7 @@ jest.mock('../src/services/movieSeenStatus', () => ({
 }));
 
 jest.mock('../src/services/messages', () => ({
+  deleteMovieRecommendation: jest.fn(),
   loadOlderMessages: jest.fn(),
   normalizeMessageText: jest.fn((value: string) => value.trim()),
   sendTextMessage: jest.fn(),
@@ -91,6 +96,7 @@ beforeEach(() => {
   moviesSubscriptions.length = 0;
   noteSubscriptions.length = 0;
   seenSubscriptions.length = 0;
+  messageSubscriptions.length = 0;
   jest.clearAllMocks();
   jest.mocked(enrichGroupMovieMetadata).mockResolvedValue({ groupId: 'group-1', groupMovieId: 'tmdb_603', originalTitle: null, imdbId: null });
   jest.mocked(loadOlderMessages).mockResolvedValue({ messages: [], cursor: null, hasMore: false });
@@ -98,7 +104,12 @@ beforeEach(() => {
   jest.mocked(saveWatchNote).mockResolvedValue({ groupId: 'group-1', groupMovieId: 'tmdb_603', removed: false });
   jest.mocked(removeWatchNote).mockResolvedValue({ groupId: 'group-1', groupMovieId: 'tmdb_603', removed: true });
   jest.mocked(setMovieSeenStatus).mockImplementation(async (groupId, groupMovieId, seen) => ({ groupId, groupMovieId, seen }));
-  jest.mocked(subscribeToLatestMessages).mockReturnValue(jest.fn());
+  jest.mocked(deleteMovieRecommendation).mockResolvedValue({ groupId: 'group-1', messageId: 'movie-message', deleted: true, movieRemoved: false });
+  jest.mocked(subscribeToLatestMessages).mockImplementation((groupId, onMessages) => {
+    const unsubscribe = jest.fn();
+    messageSubscriptions.push({ groupId, onMessages, unsubscribe });
+    return unsubscribe;
+  });
   jest.mocked(subscribeToGroupMovie).mockImplementation((groupId, groupMovieId, onMovie) => {
     const unsubscribe = jest.fn();
     movieSubscriptions.push({ groupId, groupMovieId, onMovie, unsubscribe });
@@ -139,9 +150,91 @@ describe('GroupDetailScreen default section', () => {
     expect(screen.getByText('Movies recommended in this group will appear here.')).toBeOnTheScreen();
     expect(screen.queryByText('No messages yet. Start the conversation.')).toBeNull();
   });
+
+  it('lets the author confirm deletion of their chat recommendation and removes the card', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const recommendation: Message = {
+      id: 'movie-message', type: 'movie_recommendation', authorId: 'viewer', authorDisplayNameSnapshot: 'Viewer',
+      text: 'A note', createdAt: null, clientRequestId: 'request-1',
+      movie: { provider: 'tmdb', externalMovieId: '603', title: 'The Matrix', releaseYear: 1999, posterPath: null, overview: null },
+      groupMovieId: 'tmdb_603',
+    };
+    render(<GroupDetailScreen group={{ id: 'group-1', name: 'Weekend Watch', ownerId: 'viewer' }} userId="viewer" displayName="Viewer" onBack={jest.fn()} onLeft={jest.fn()} />);
+    await finishInitialLoad();
+    fireEvent.press(screen.getByText('Chat'));
+    act(() => messageSubscriptions[0].onMessages([recommendation]));
+
+    expect(screen.getByText('The Matrix (1999)')).toBeOnTheScreen();
+    fireEvent.press(screen.getByRole('button', { name: 'Delete' }));
+    expect(alert).toHaveBeenCalledWith('Delete recommendation?', expect.any(String), expect.any(Array));
+    const actions = alert.mock.calls[0][2] as { style?: string; onPress?: () => void }[];
+    await act(async () => { actions.find((action) => action.style === 'destructive')?.onPress?.(); await Promise.resolve(); });
+    expect(deleteMovieRecommendation).toHaveBeenCalledWith('group-1', 'movie-message');
+    expect(screen.queryByText('The Matrix (1999)')).toBeNull();
+    alert.mockRestore();
+  });
+
+  it('does not show a delete action on another member’s recommendation', async () => {
+    const recommendation: Message = {
+      id: 'other-movie-message', type: 'movie_recommendation', authorId: 'other', authorDisplayNameSnapshot: 'Other',
+      text: null, createdAt: null, clientRequestId: 'request-2',
+      movie: { provider: 'tmdb', externalMovieId: '603', title: 'The Matrix', releaseYear: 1999, posterPath: null, overview: null },
+      groupMovieId: 'tmdb_603',
+    };
+    render(<GroupDetailScreen group={{ id: 'group-1', name: 'Weekend Watch', ownerId: 'viewer' }} userId="viewer" displayName="Viewer" onBack={jest.fn()} onLeft={jest.fn()} />);
+    await finishInitialLoad();
+    fireEvent.press(screen.getByText('Chat'));
+    act(() => messageSubscriptions[0].onMessages([recommendation]));
+
+    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
+  });
 });
 
 describe('GroupMovieDetailScreen realtime watch notes', () => {
+  it('allows deleting an authored history entry and updates the list after confirmation', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const ownRecommendation: RecommendationHistoryItem = {
+      id: 'movie-message', messageId: 'movie-message', authorId: 'viewer', authorDisplayNameSnapshot: 'Viewer', note: 'My note', createdAt: null,
+    };
+    jest.mocked(loadRecommendationHistory).mockResolvedValue([ownRecommendation]);
+    const onBack = jest.fn();
+    render(<GroupMovieDetailScreen groupId="group-1" groupMovieId="tmdb_603" userId="viewer" onBack={onBack} />);
+    await finishInitialLoad();
+    act(() => {
+      movieSubscriptions[0].onMovie(movie());
+      noteSubscriptions[0].onNotes([]);
+    });
+
+    expect(screen.getByText('My note')).toBeOnTheScreen();
+    fireEvent.press(screen.getByRole('button', { name: 'Delete' }));
+    const actions = alert.mock.calls[0][2] as { style?: string; onPress?: () => void }[];
+    await act(async () => { actions.find((action) => action.style === 'destructive')?.onPress?.(); await Promise.resolve(); });
+    expect(deleteMovieRecommendation).toHaveBeenCalledWith('group-1', 'movie-message');
+    expect(screen.queryByText('My note')).toBeNull();
+    expect(onBack).not.toHaveBeenCalled();
+    alert.mockRestore();
+  });
+
+  it('returns to the group list when deleting the final recommendation removes the movie', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    jest.mocked(loadRecommendationHistory).mockResolvedValue([{
+      id: 'last-message', messageId: 'last-message', authorId: 'viewer', authorDisplayNameSnapshot: 'Viewer', note: null, createdAt: null,
+    }]);
+    jest.mocked(deleteMovieRecommendation).mockResolvedValue({ groupId: 'group-1', messageId: 'last-message', deleted: true, movieRemoved: true });
+    const onBack = jest.fn();
+    render(<GroupMovieDetailScreen groupId="group-1" groupMovieId="tmdb_603" userId="viewer" onBack={onBack} />);
+    await finishInitialLoad();
+    act(() => {
+      movieSubscriptions[0].onMovie(movie());
+      noteSubscriptions[0].onNotes([]);
+    });
+    fireEvent.press(screen.getByRole('button', { name: 'Delete' }));
+    const actions = alert.mock.calls[0][2] as { style?: string; onPress?: () => void }[];
+    await act(async () => { actions.find((action) => action.style === 'destructive')?.onPress?.(); await Promise.resolve(); });
+    expect(onBack).toHaveBeenCalledTimes(1);
+    alert.mockRestore();
+  });
+
   it('reflects note creation, update, removal, and aggregate-rating updates', async () => {
     render(<GroupMovieDetailScreen groupId="group-1" groupMovieId="tmdb_603" userId="viewer" onBack={jest.fn()} />);
     await finishInitialLoad();

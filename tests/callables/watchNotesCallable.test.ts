@@ -1,5 +1,5 @@
 import { getFirestore } from '../../functions/node_modules/firebase-admin/lib/firestore/index.js';
-import { enrichGroupMovieMetadata as enrichGroupMovieMetadataCallable, recommendMovie, saveWatchNote, setMovieSeenStatus } from '../../functions/src/index';
+import { deleteMovieRecommendation, enrichGroupMovieMetadata as enrichGroupMovieMetadataCallable, recommendMovie, saveWatchNote, setMovieSeenStatus } from '../../functions/src/index';
 import * as tmdbModule from '../../functions/src/tmdb';
 
 const firestore = getFirestore();
@@ -40,6 +40,12 @@ afterAll(async () => {
 });
 
 describe('saveWatchNote callable', () => {
+  it('touches the parent movie when a review-only watch note changes', async () => {
+    await callSaveWatchNote({ groupId, groupMovieId, rating: null, reviewText: 'A note without a rating', watchedOn: '' });
+    expect((await movieReference.get()).data()?.updatedAt).toBeDefined();
+    expect((await movieReference.get()).data()).toMatchObject({ ratingCount: 0, ratingSum: 0, ratingAverage: null });
+  });
+
   it('creates, updates, and removes a rated watch note', async () => {
     await callSaveWatchNote({ groupId, groupMovieId, rating: 5, reviewText: 'Excellent', watchedOn: 'Cinema' });
     await expect((await noteReference.get()).data()).toMatchObject({ userId, rating: 5, reviewText: 'Excellent' });
@@ -145,7 +151,11 @@ describe('recommendMovie callable', () => {
       recommendedByDisplayNameSnapshot: 'Alice',
       note: 'Great movie',
       seen: false,
+      recommendationMessageId,
     });
+
+    const recommendation = await firestore.doc(`groups/${recommendationGroupId}/messages/${recommendationMessageId}`).get();
+    expect(recommendation.data()?.inboxRecipientIds).toContain(recipientId);
 
     const recommenderInbox = await firestore.doc(`users/${recommenderId}/receivedRecommendations/${recommendationMessageId}`).get();
     expect(recommenderInbox.exists).toBe(false);
@@ -277,5 +287,133 @@ describe('setMovieSeenStatus callable', () => {
   it('rejects movies that are not present in the selected group', async () => {
     await expect(callSetStatus(firstGroupId, 'tmdb_550', true)).rejects.toMatchObject({ code: 'not-found' });
     expect((await statusReference.get()).exists).toBe(false);
+  });
+});
+
+describe('deleteMovieRecommendation callable', () => {
+  const deletionGroupId = 'recommendation-delete-group';
+  const authorId = 'recommendation-delete-author';
+  const otherAuthorId = 'recommendation-delete-other-author';
+  const groupMovieId = 'tmdb_603';
+  const firstMessageId = 'movie_author_first';
+  const secondMessageId = 'movie_other_second';
+  const groupRef = firestore.doc(`groups/${deletionGroupId}`);
+  const movieRef = firestore.doc(`groups/${deletionGroupId}/groupMovies/${groupMovieId}`);
+  const firstMessageRef = firestore.doc(`groups/${deletionGroupId}/messages/${firstMessageId}`);
+  const secondMessageRef = firestore.doc(`groups/${deletionGroupId}/messages/${secondMessageId}`);
+  const historyCollection = movieRef.collection('recommendations');
+  const watchNotesCollection = movieRef.collection('watchNotes');
+
+  const callDelete = (messageId: string, uid: string | null = authorId) => deleteMovieRecommendation.run({
+    data: { groupId: deletionGroupId, messageId },
+    auth: uid ? { uid } : null,
+  } as unknown as Parameters<typeof deleteMovieRecommendation.run>[0]);
+
+  const recommendationMessage = (author: string, messageId: string, timestamp: Date) => ({
+    type: 'movie_recommendation',
+    authorId: author,
+    authorDisplayNameSnapshot: author,
+    text: null,
+    createdAt: timestamp,
+    clientRequestId: messageId,
+    movie: { provider: 'tmdb', externalMovieId: '603', title: 'The Matrix' },
+    groupMovieId,
+  });
+
+  beforeEach(async () => {
+    await groupRef.set({ name: 'Delete Test Group', lastActivityPreview: 'Recommended The Matrix' });
+    await firestore.doc(`groups/${deletionGroupId}/members/${authorId}`).set({ status: 'active' });
+    await firestore.doc(`groups/${deletionGroupId}/members/${otherAuthorId}`).set({ status: 'active' });
+    await firestore.doc(`groups/${deletionGroupId}/members/${userId}`).set({ status: 'active' });
+    await movieRef.set({
+      provider: 'tmdb', externalMovieId: '603', title: 'The Matrix',
+      recommendationCount: 2, recommenderIds: [authorId, otherAuthorId],
+      firstRecommendedAt: new Date('2025-01-01T00:00:00.000Z'),
+      firstRecommendationMessageId: firstMessageId,
+      lastRecommendedAt: new Date('2025-01-02T00:00:00.000Z'),
+      ratingCount: 1, ratingSum: 5, ratingAverage: 5,
+    });
+    await firstMessageRef.set(recommendationMessage(authorId, firstMessageId, new Date('2025-01-01T00:00:00.000Z')));
+    await secondMessageRef.set(recommendationMessage(otherAuthorId, secondMessageId, new Date('2025-01-02T00:00:00.000Z')));
+    await historyCollection.doc(firstMessageId).set({ messageId: firstMessageId, authorId, authorDisplayNameSnapshot: authorId, createdAt: new Date('2025-01-01T00:00:00.000Z') });
+    await historyCollection.doc(secondMessageId).set({ messageId: secondMessageId, authorId: otherAuthorId, authorDisplayNameSnapshot: otherAuthorId, createdAt: new Date('2025-01-02T00:00:00.000Z') });
+    await watchNotesCollection.doc('note-owner').set({ userId: 'note-owner', rating: 5, reviewText: 'Keep while another recommendation remains' });
+    await firestore.doc(`users/${otherAuthorId}/receivedRecommendations/${firstMessageId}`).set({ recommendationMessageId: firstMessageId, groupId: deletionGroupId, seen: false });
+  });
+
+  afterEach(async () => {
+    await groupRef.delete();
+    await firestore.doc(`groups/${deletionGroupId}/members/${authorId}`).delete();
+    await firestore.doc(`groups/${deletionGroupId}/members/${otherAuthorId}`).delete();
+    await firestore.doc(`groups/${deletionGroupId}/members/${userId}`).delete();
+    await firstMessageRef.delete();
+    await secondMessageRef.delete();
+    await firestore.doc(`groups/${deletionGroupId}/messages/not-a-recommendation`).delete();
+    await movieRef.delete();
+    const [history, notes] = await Promise.all([historyCollection.get(), watchNotesCollection.get()]);
+    await Promise.all([...history.docs, ...notes.docs].map((item) => item.ref.delete()));
+    await firestore.doc(`users/${otherAuthorId}/receivedRecommendations/${firstMessageId}`).delete();
+    await firestore.doc(`users/${otherAuthorId}/receivedRecommendations/${secondMessageId}`).delete();
+  });
+
+  it('deletes only the authored recommendation and keeps the group movie while another recommendation remains', async () => {
+    await firestore.doc(`groups/${deletionGroupId}/members/${otherAuthorId}`).update({ status: 'left' });
+    await expect(callDelete(firstMessageId)).resolves.toMatchObject({ deleted: true, movieRemoved: false });
+    expect((await firstMessageRef.get()).exists).toBe(false);
+    expect((await historyCollection.doc(firstMessageId).get()).exists).toBe(false);
+    expect((await secondMessageRef.get()).exists).toBe(true);
+    expect((await movieRef.get()).data()).toMatchObject({
+      recommendationCount: 1,
+      recommenderIds: [otherAuthorId],
+      firstRecommendationMessageId: secondMessageId,
+      ratingCount: 1,
+      ratingSum: 5,
+    });
+    expect((await watchNotesCollection.doc('note-owner').get()).exists).toBe(true);
+    expect((await firestore.doc(`users/${otherAuthorId}/receivedRecommendations/${firstMessageId}`).get()).exists).toBe(false);
+  });
+
+  it('removes the group movie and nested watch notes when the last recommendation is deleted', async () => {
+    await secondMessageRef.delete();
+    await historyCollection.doc(secondMessageId).delete();
+    await movieRef.update({ recommendationCount: 1, recommenderIds: [authorId] });
+
+    await expect(callDelete(firstMessageId)).resolves.toMatchObject({ deleted: true, movieRemoved: true });
+    expect((await movieRef.get()).exists).toBe(false);
+    expect((await watchNotesCollection.doc('note-owner').get()).exists).toBe(false);
+    expect((await firstMessageRef.get()).exists).toBe(false);
+  });
+
+  it('rejects unauthenticated and non-author delete attempts without changing data', async () => {
+    await expect(callDelete(firstMessageId, null)).rejects.toMatchObject({ code: 'unauthenticated' });
+    await expect(callDelete(secondMessageId)).rejects.toMatchObject({ code: 'permission-denied' });
+    await firestore.doc(`groups/${deletionGroupId}/messages/not-a-recommendation`).set({ type: 'text', authorId });
+    await expect(callDelete('not-a-recommendation')).rejects.toMatchObject({ code: 'permission-denied' });
+    await firestore.doc(`groups/${deletionGroupId}/members/${authorId}`).update({ status: 'left' });
+    await expect(callDelete(firstMessageId)).rejects.toMatchObject({ code: 'permission-denied' });
+    expect((await firstMessageRef.get()).exists).toBe(true);
+    expect((await secondMessageRef.get()).exists).toBe(true);
+  });
+
+  it('handles concurrent duplicate deletion requests idempotently', async () => {
+    const results = await Promise.all([callDelete(firstMessageId), callDelete(firstMessageId)]);
+    expect(results.filter((result) => result.deleted)).toHaveLength(1);
+    expect((await movieRef.get()).data()?.recommendationCount).toBe(1);
+    expect((await firstMessageRef.get()).exists).toBe(false);
+  });
+
+  it('does not leave a watch note orphaned when its save races with deleting the last recommendation', async () => {
+    await secondMessageRef.delete();
+    await historyCollection.doc(secondMessageId).delete();
+    await movieRef.update({ recommendationCount: 1, recommenderIds: [authorId] });
+
+    await Promise.allSettled([
+      callDelete(firstMessageId),
+      callSaveWatchNote({ groupId: deletionGroupId, groupMovieId, rating: null, reviewText: 'Concurrent note', watchedOn: '' }),
+    ]);
+
+    expect((await movieRef.get()).exists).toBe(false);
+    expect((await watchNotesCollection.doc(userId).get()).exists).toBe(false);
+    expect((await firstMessageRef.get()).exists).toBe(false);
   });
 });

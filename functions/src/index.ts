@@ -73,6 +73,7 @@ function receivedRecommendationInboxEntry(
 		recommendedAt: timestamp,
 		seen: false,
 		seenAt: null,
+		recommendationMessageId: messageId,
 		updatedAt: timestamp,
 	};
 }
@@ -302,6 +303,9 @@ export const recommendMovie = onCall({ secrets: [tmdbReadAccessToken] }, async (
 	const historyRef = groupMovieRef.collection('recommendations').doc(messageId);
 	const timestamp = FieldValue.serverTimestamp();
 	const activeMembersSnapshot = await groupRef.collection('members').where('status', '==', 'active').get();
+	const inboxRecipientIds = activeMembersSnapshot.docs
+		.filter((memberSnapshot) => memberSnapshot.id !== uid)
+		.map((memberSnapshot) => memberSnapshot.id);
 
 	await firestore.runTransaction(async (transaction) => {
 		const existing = await transaction.get(messageRef);
@@ -332,6 +336,7 @@ export const recommendMovie = onCall({ secrets: [tmdbReadAccessToken] }, async (
 			clientRequestId,
 			movie: movieData,
 			groupMovieId: groupMovieId(movie),
+			inboxRecipientIds,
 		});
 		if (existingMovie.exists) {
 			transaction.set(groupMovieRef, {
@@ -384,6 +389,126 @@ export const recommendMovie = onCall({ secrets: [tmdbReadAccessToken] }, async (
 	});
 
 	return { messageId, clientRequestId, movie, groupMovieId: groupMovieId(movie), note: note || null };
+});
+
+export const deleteMovieRecommendation = onCall(async (request) => {
+	const uid = requireAuth(request);
+	const groupId = requireString(request.data?.groupId, 'Group ID');
+	const messageId = requireString(request.data?.messageId, 'Message ID');
+	const groupRef = firestore.collection('groups').doc(groupId);
+	const memberRef = groupRef.collection('members').doc(uid);
+	const messageRef = groupRef.collection('messages').doc(messageId);
+
+	return firestore.runTransaction(async (transaction) => {
+		const [groupSnapshot, memberSnapshot, messageSnapshot] = await Promise.all([
+			transaction.get(groupRef),
+			transaction.get(memberRef),
+			transaction.get(messageRef),
+		]);
+		if (!groupSnapshot.exists || !memberSnapshot.exists || memberSnapshot.data()?.status !== 'active') {
+			throw new HttpsError('permission-denied', 'Active group membership is required.');
+		}
+		if (!messageSnapshot.exists) return { groupId, messageId, deleted: false, movieRemoved: false };
+
+		const message = messageSnapshot.data();
+		if (message?.type !== 'movie_recommendation' || message.authorId !== uid) {
+			throw new HttpsError('permission-denied', 'Only the author may delete a movie recommendation.');
+		}
+		const groupMovieIdValue = requireString(message.groupMovieId, 'Group movie ID');
+		const movie = message.movie;
+		if (movie?.provider !== 'tmdb' || typeof movie.externalMovieId !== 'string'
+			|| groupMovieIdValue !== `tmdb_${movie.externalMovieId}`) {
+			throw new HttpsError('failed-precondition', 'The recommendation has invalid catalog metadata.');
+		}
+
+		const groupMovieRef = groupRef.collection('groupMovies').doc(groupMovieIdValue);
+		const historyCollection = groupMovieRef.collection('recommendations');
+		const historyRef = historyCollection.doc(messageId);
+		const inboxCollectionQuery = firestore.collectionGroup('receivedRecommendations')
+			.where('recommendationMessageId', '==', messageId);
+		const activeMembersQuery = groupRef.collection('members').where('status', '==', 'active');
+		const [groupMovieSnapshot, historySnapshot, inboxQuerySnapshot, activeMembersSnapshot] = await Promise.all([
+			transaction.get(groupMovieRef),
+			transaction.get(historyCollection),
+			transaction.get(inboxCollectionQuery),
+			transaction.get(activeMembersQuery),
+		]);
+		if (!groupMovieSnapshot.exists) throw new HttpsError('failed-precondition', 'The group movie is missing.');
+		const targetHistory = historySnapshot.docs.find((item) => item.id === messageId);
+		if (!targetHistory || targetHistory.data().messageId !== messageId || targetHistory.data().authorId !== uid) {
+			throw new HttpsError('failed-precondition', 'The recommendation history is missing or inconsistent.');
+		}
+
+		const remaining = historySnapshot.docs
+			.filter((item) => item.id !== messageId)
+			.sort((left, right) => {
+				const leftTimestamp = left.data().createdAt;
+				const rightTimestamp = right.data().createdAt;
+				const leftMillis = leftTimestamp && typeof leftTimestamp.toMillis === 'function' ? leftTimestamp.toMillis() : 0;
+				const rightMillis = rightTimestamp && typeof rightTimestamp.toMillis === 'function' ? rightTimestamp.toMillis() : 0;
+				return leftMillis - rightMillis || left.id.localeCompare(right.id);
+			});
+		const movieRemoved = remaining.length === 0;
+		const candidateInboxRefs = new Map<string, FirebaseFirestore.DocumentReference>();
+		for (const inboxDocument of inboxQuerySnapshot.docs) {
+			if (inboxDocument.data().groupId === groupId) candidateInboxRefs.set(inboxDocument.ref.path, inboxDocument.ref);
+		}
+		if (Array.isArray(message.inboxRecipientIds)) {
+			for (const recipientId of message.inboxRecipientIds) {
+				if (typeof recipientId !== 'string' || recipientId === uid) continue;
+				const inboxRef = firestore.collection('users').doc(recipientId).collection('receivedRecommendations').doc(messageId);
+				candidateInboxRefs.set(inboxRef.path, inboxRef);
+			}
+		}
+		for (const member of activeMembersSnapshot.docs) {
+			if (member.id === uid) continue;
+			const inboxRef = firestore.collection('users').doc(member.id).collection('receivedRecommendations').doc(messageId);
+			candidateInboxRefs.set(inboxRef.path, inboxRef);
+		}
+		const inboxCandidates = [...candidateInboxRefs.values()];
+		const [watchNotesSnapshot, inboxSnapshots] = await Promise.all([
+			movieRemoved ? transaction.get(groupMovieRef.collection('watchNotes')) : Promise.resolve(null),
+			inboxCandidates.length > 0 ? transaction.getAll(...inboxCandidates) : Promise.resolve([]),
+		]);
+		const inboxRefs = inboxSnapshots
+			.filter((inboxSnapshot) => inboxSnapshot.exists && inboxSnapshot.data()?.groupId === groupId)
+			.map((inboxSnapshot) => inboxSnapshot.ref);
+		const activityPreviewWillChange = groupSnapshot.data()?.lastActivityPreview === `Recommended ${movie.title}`;
+		const writeCount = 2 + (movieRemoved ? 1 + (watchNotesSnapshot?.size ?? 0) : 1) + inboxRefs.length + (activityPreviewWillChange ? 1 : 0);
+		if (writeCount > 450) {
+			throw new HttpsError('resource-exhausted', 'This recommendation has too much associated data to delete in one operation.');
+		}
+
+		transaction.delete(messageRef);
+		transaction.delete(historyRef);
+		if (movieRemoved) {
+			for (const watchNote of watchNotesSnapshot?.docs ?? []) transaction.delete(watchNote.ref);
+			transaction.delete(groupMovieRef);
+		} else {
+			const recommenderIds: string[] = [];
+			for (const recommendation of remaining) {
+				const authorId = recommendation.data().authorId;
+				if (typeof authorId === 'string' && !recommenderIds.includes(authorId)) recommenderIds.push(authorId);
+			}
+			transaction.update(groupMovieRef, {
+				recommendationCount: remaining.length,
+				recommenderIds: recommenderIds.slice(-100),
+				firstRecommendedAt: remaining[0].data().createdAt ?? null,
+				firstRecommendationMessageId: remaining[0].id,
+				lastRecommendedAt: remaining[remaining.length - 1].data().createdAt ?? null,
+				updatedAt: FieldValue.serverTimestamp(),
+			});
+		}
+		for (const inboxRef of inboxRefs) transaction.delete(inboxRef);
+		if (activityPreviewWillChange) {
+			transaction.update(groupRef, {
+				lastActivityAt: FieldValue.serverTimestamp(),
+				lastActivityPreview: 'A movie recommendation was deleted',
+				updatedAt: FieldValue.serverTimestamp(),
+			});
+		}
+		return { groupId, messageId, deleted: true, movieRemoved };
+	});
 });
 
 export const enrichGroupMovieMetadata = onCall({ secrets: [tmdbReadAccessToken] }, async (request) => {
@@ -514,11 +639,13 @@ export const saveWatchNote = onCall(async (request) => {
 				updatedAt: timestamp,
 			}, { merge: true });
 		}
-		if (ratingChanged || remove && noteSnapshot.exists) {
+		if (!remove || noteSnapshot.exists) {
 			transaction.update(groupMovieRef, {
-				ratingCount: nextCount,
-				ratingSum: nextSum,
-				ratingAverage: nextAverage,
+				...(ratingChanged || remove ? {
+					ratingCount: nextCount,
+					ratingSum: nextSum,
+					ratingAverage: nextAverage,
+				} : {}),
 				updatedAt: timestamp,
 			});
 		}

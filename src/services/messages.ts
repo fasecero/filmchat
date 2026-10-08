@@ -14,7 +14,8 @@ import {
   type Timestamp,
   type Unsubscribe,
 } from 'firebase/firestore';
-import { db } from '../firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '../firebase';
 
 export const MAX_MESSAGE_LENGTH = 2000;
 export const MESSAGE_PAGE_SIZE = 50;
@@ -157,4 +158,13 @@ export const sendTextMessage = async (
     clientRequestId,
   });
   return { messageId, clientRequestId, text: normalizedText };
+};
+
+export const deleteMovieRecommendation = async (groupId: string, messageId: string) => {
+  const callable = httpsCallable<
+    { groupId: string; messageId: string },
+    { groupId: string; messageId: string; deleted: boolean; movieRemoved: boolean }
+  >(functions, 'deleteMovieRecommendation');
+  const response = await callable({ groupId, messageId });
+  return response.data;
 };

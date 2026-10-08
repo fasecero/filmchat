@@ -76,6 +76,7 @@ it('allows active members to create text messages and rejects invalid authors', 
   await expect(owner.doc('groups/group-1/messages/text-invalid').set({ ...message, type: 'movie_recommendation' })).rejects.toThrow();
   await expect(owner.doc('groups/group-1/messages/text-empty').set({ ...message, text: '   ' })).rejects.toThrow();
   await expect(owner.doc('groups/group-1/messages/text_request-1').update({ text: 'Changed' })).rejects.toThrow();
+  await expect(owner.doc('groups/group-1/messages/text_request-1').delete()).rejects.toThrow();
   await expect(owner.doc('groups/group-1/messages/text_request-1').get()).resolves.toBeDefined();
 });
 
@@ -115,12 +116,15 @@ it('allows active members to read movie history but denies client movie writes',
   await expect(owner.doc('groups/group-1/groupMovies/tmdb_603/watchNotes/owner').get()).resolves.toBeDefined();
   await expect(stranger.doc('groups/group-1/groupMovies/tmdb_603/watchNotes/owner').get()).rejects.toThrow();
   await expect(owner.doc('groups/group-1/groupMovies/tmdb_603/watchNotes/owner').set({ userId: 'owner', rating: 4 })).rejects.toThrow();
+  await expect(owner.doc('groups/group-1/groupMovies/tmdb_603/watchNotes/owner').delete()).rejects.toThrow();
   await expect(owner.doc('groups/group-1/groupMovies/tmdb_603/watchNotes/stranger').set({ userId: 'stranger', rating: 4 })).rejects.toThrow();
   await expect(owner.doc('groups/group-1/groupMovies/tmdb_603').set(movie)).rejects.toThrow();
+  await expect(owner.doc('groups/group-1/groupMovies/tmdb_603').delete()).rejects.toThrow();
   await expect(owner.doc('groups/group-1/groupMovies/tmdb_603/recommendations/movie_request-2').set({
     messageId: 'movie_request-2',
     authorId: 'owner',
   })).rejects.toThrow();
+  await expect(owner.doc('groups/group-1/groupMovies/tmdb_603/recommendations/movie_request-1').delete()).rejects.toThrow();
 });
 
 it('allows only the owner to read movie seen statuses and denies client writes', async () => {

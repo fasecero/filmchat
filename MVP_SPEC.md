@@ -131,6 +131,7 @@ When the same catalog movie is recommended again in the same group, create a new
 - Text is required after trim, maximum 2,000 characters, and sent exactly as text (no URLs, mentions, attachments, reactions, replies, edits, or deletes).
 - A movie recommendation has required movie data and may have an optional accompanying note up to 500 characters. The note is not a separate text message.
 - The sender sees a local pending state; on success it receives the server timestamp. On failure it remains visibly retryable and is not silently lost.
+- A member may delete only their own movie recommendation from chat or recommendation history. The recommendation message, history row, and inbox copies are removed. The group movie remains while any recommendation remains; removing the last recommendation also removes that group-movie record, its watch notes, and rating aggregate.
 
 ### Movies and ratings/watch notes
 
@@ -201,6 +202,7 @@ Use these conventions unless they conflict with the durable-recommendation mecha
 - A recommendation card includes poster (or placeholder), title, release year when known, sender, send time, optional note, and a clear indicator that it was saved to the group list. It links to its group-movie detail.
 - The visual treatment distinguishes a movie card from a text bubble through original card styling and poster imagery, while retaining familiar chat affordances: incoming/outgoing alignment, sender name where applicable, time, tap target, and chronological placement.
 - A `movie_recommendation` must be created only by the recommendation Cloud Function. That function atomically creates the message/history and updates the persistent group-movie record. A failed transaction must yield neither a durable list change nor a visible sent recommendation.
+- A recommendation may be deleted only by its author through a Cloud Function. Deleting a recommendation updates the group's recommendation history and aggregates atomically; if it is the final recommendation, its group movie and nested watch notes are removed.
 - A user who leaves can no longer load chat history or receive live updates. Their historic messages remain for remaining members, labelled with their stored author snapshot.
 - Watch notes are not chat messages and do not create chat activity. They are shown only in the associated group-movie detail.
 

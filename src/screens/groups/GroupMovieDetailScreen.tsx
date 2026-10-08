@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Linking, Pressable, ScrollView, Text, TextInput, View, StyleSheet } from 'react-native';
+import { ActivityIndicator, Alert, Image, Linking, Pressable, ScrollView, Text, TextInput, View, StyleSheet } from 'react-native';
 import { TmdbAttribution } from '../../components/TmdbAttribution';
 import { useLocale } from '../../i18n';
 import {
@@ -16,6 +16,7 @@ import {
   type WatchNote,
 } from '../../services/groupMovies';
 import { setMovieSeenStatus, subscribeToMovieSeenStatus } from '../../services/movieSeenStatus';
+import { deleteMovieRecommendation } from '../../services/messages';
 
 export function GroupMovieDetailScreen({ groupId, groupMovieId, userId, onBack }: { groupId: string; groupMovieId: string; userId: string; onBack: () => void }) {
   const { t } = useLocale();
@@ -35,6 +36,8 @@ export function GroupMovieDetailScreen({ groupId, groupMovieId, userId, onBack }
   const [seen, setSeen] = useState(false);
   const [savingSeen, setSavingSeen] = useState(false);
   const [seenError, setSeenError] = useState<string | null>(null);
+  const [deletingRecommendationId, setDeletingRecommendationId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const applyMovie = useCallback((nextMovie: GroupMovie | null) => {
     if (!nextMovie) { setError(t('noMovieAvailable')); return; }
@@ -122,6 +125,28 @@ export function GroupMovieDetailScreen({ groupId, groupMovieId, userId, onBack }
     }
   };
 
+  const confirmDeleteRecommendation = (item: RecommendationHistoryItem) => Alert.alert(
+    t('deleteRecommendationTitle'),
+    t('deleteRecommendationPrompt'),
+    [
+      { text: t('cancel'), style: 'cancel' },
+      { text: t('deleteRecommendation'), style: 'destructive', onPress: () => {
+        setDeletingRecommendationId(item.id);
+        setDeleteError(null);
+        void deleteMovieRecommendation(groupId, item.messageId)
+          .then((result) => {
+            if (result.movieRemoved) {
+              onBack();
+              return;
+            }
+            setHistory((current) => current.filter((historyItem) => historyItem.id !== item.id));
+          })
+          .catch(() => setDeleteError(t('deleteRecommendationError')))
+          .finally(() => setDeletingRecommendationId(null));
+      } },
+    ],
+  );
+
   const imdbUrl = movie?.imdbId ? `https://www.imdb.com/title/${movie.imdbId}` : null;
 
   return <View style={styles.container}>
@@ -162,7 +187,8 @@ export function GroupMovieDetailScreen({ groupId, groupMovieId, userId, onBack }
       <Text style={styles.sectionTitle}>{t('memberWatchNotes')}</Text>
       {watchNotes.length === 0 ? <Text style={styles.status}>{t('noMemberNotes')}</Text> : watchNotes.map((note) => <View key={note.id} style={styles.historyRow}><Text style={styles.author}>{note.userId === userId ? t('you') : note.displayNameSnapshot}</Text><Text style={styles.starsText}>{note.rating ? `${'★'.repeat(note.rating)}${'☆'.repeat(5 - note.rating)}` : t('noRatings')}</Text>{note.reviewText ? <Text style={styles.note}>{note.reviewText}</Text> : null}{note.watchedOn ? <Text style={styles.meta}>{t('watchedOn')} {note.watchedOn}</Text> : null}</View>)}
       <Text style={styles.sectionTitle}>{t('recommendationHistory')}</Text>
-      {history.length === 0 ? <Text style={styles.status}>{t('noRecommendationHistory')}</Text> : history.map((item) => <View key={item.id} style={styles.historyRow}><Text style={styles.author}>{item.authorDisplayNameSnapshot}</Text>{item.note ? <Text style={styles.note}>{item.note}</Text> : null}<Text style={styles.meta}>{formatTimestamp(item.createdAt)}</Text></View>)}
+      {deleteError ? <Text style={styles.error}>{deleteError}</Text> : null}
+      {history.length === 0 ? <Text style={styles.status}>{t('noRecommendationHistory')}</Text> : history.map((item) => <View key={item.id} style={styles.historyRow}><Text style={styles.author}>{item.authorId === userId ? t('you') : item.authorDisplayNameSnapshot}</Text>{item.note ? <Text style={styles.note}>{item.note}</Text> : null}<Text style={styles.meta}>{formatTimestamp(item.createdAt)}</Text>{item.authorId === userId ? <Pressable accessibilityRole="button" disabled={deletingRecommendationId === item.id} onPress={() => confirmDeleteRecommendation(item)}><Text style={styles.deleteAction}>{deletingRecommendationId === item.id ? t('deletingRecommendation') : t('deleteRecommendation')}</Text></Pressable> : null}</View>)}
     </ScrollView> : null}
     <TmdbAttribution />
   </View>;
@@ -183,4 +209,5 @@ const styles = StyleSheet.create({
   stars: { flexDirection: 'row', gap: 8 }, star: { color: '#B8C1BC', fontSize: 32 }, starSelected: { color: '#C05640', fontSize: 32 }, starsText: { color: '#C05640', fontSize: 18 }, input: { borderColor: '#D5DFDA', borderRadius: 8, borderWidth: 1, color: '#17313B', padding: 10 }, reviewInput: { minHeight: 72, textAlignVertical: 'top' }, error: { color: '#A13A2A', fontSize: 13 },
   buttonRow: { flexDirection: 'row', gap: 10 }, primaryButton: { backgroundColor: '#C05640', borderRadius: 8, padding: 12 }, primaryText: { color: '#FFFFFF', fontWeight: '800' }, secondaryButton: { borderColor: '#C05640', borderRadius: 8, borderWidth: 1, padding: 12 }, secondaryText: { color: '#C05640', fontWeight: '800' }, noteSummary: { gap: 5 }, note: { color: '#17313B', lineHeight: 19 },
   historyRow: { backgroundColor: '#FFFFFF', borderRadius: 10, gap: 4, padding: 12 }, author: { color: '#C05640', fontWeight: '800' }, status: { color: '#52656B', padding: 24, textAlign: 'center' },
+  deleteAction: { alignSelf: 'flex-start', color: '#A3372C', fontSize: 12, fontWeight: '700', paddingVertical: 4 },
 });

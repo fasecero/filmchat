@@ -8,12 +8,14 @@ import { type Group } from '../../services/groups';
 import { buildInviteLink, createInvite, leaveGroup } from '../../services/invites';
 import {
   createClientRequestId,
+  deleteMovieRecommendation,
   loadOlderMessages,
   normalizeMessageText,
   sendTextMessage,
   subscribeToLatestMessages,
   type Message,
   type MovieCatalogResult,
+  type MovieRecommendationMessage,
   type TextMessage,
 } from '../../services/messages';
 import { searchMovies, recommendMovie } from '../../services/movies';
@@ -47,6 +49,7 @@ export function GroupDetailScreen({ group, userId, displayName, onBack, onLeft }
   const [movieSending, setMovieSending] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [leaveError, setLeaveError] = useState<string | null>(null);
+  const [deletingRecommendationId, setDeletingRecommendationId] = useState<string | null>(null);
   const [section, setSection] = useState<'chat' | 'movies'>('movies');
   const [selectedMovieId, setSelectedMovieId] = useState<string | null>(null);
   const cursor = useRef<Parameters<typeof loadOlderMessages>[1]>(null);
@@ -161,6 +164,24 @@ export function GroupDetailScreen({ group, userId, displayName, onBack, onLeft }
     } finally { setMovieSending(false); }
   };
 
+  const confirmDeleteRecommendation = (message: MovieRecommendationMessage) => Alert.alert(
+    t('deleteRecommendationTitle'),
+    t('deleteRecommendationPrompt'),
+    [
+      { text: t('cancel'), style: 'cancel' },
+      { text: t('deleteRecommendation'), style: 'destructive', onPress: () => {
+        setDeletingRecommendationId(message.id);
+        void deleteMovieRecommendation(group.id, message.id)
+          .then(() => {
+            setMessages((current) => current.filter((item) => item.id !== message.id));
+            setPending((current) => { const next = { ...current }; delete next[message.id]; return next; });
+          })
+          .catch(() => setError(t('deleteRecommendationError')))
+          .finally(() => setDeletingRecommendationId(null));
+      } },
+    ],
+  );
+
   const shareInvite = async () => {
     try {
       const invite = await createInvite(group.id);
@@ -194,7 +215,7 @@ export function GroupDetailScreen({ group, userId, displayName, onBack, onLeft }
         if (contentOffset.y < 80) void loadOlder();
       }}
       scrollEventThrottle={100}
-      renderItem={({ item, index }) => <MessageRow message={item} previous={allMessages[index - 1]} currentUserId={userId} onMoviePress={setSelectedMovieId} onRetry={item.type === 'text' && pending[item.id] ? () => void send(item.clientRequestId, item.text) : undefined} />}
+      renderItem={({ item, index }) => <MessageRow message={item} previous={allMessages[index - 1]} currentUserId={userId} deletingRecommendation={deletingRecommendationId === item.id} onMoviePress={setSelectedMovieId} onDeleteRecommendation={confirmDeleteRecommendation} onRetry={item.type === 'text' && pending[item.id] ? () => void send(item.clientRequestId, item.text) : undefined} />}
       ListEmptyComponent={<Text style={styles.status}>{t('noMessages')}</Text>}
     />}
     {hasNewMessages ? <Pressable style={styles.newMessages} onPress={() => { scrollToBottom(); setHasNewMessages(false); }}><Text style={styles.newMessagesText}>{t('newMessagesButton')}</Text></Pressable> : null}
@@ -204,11 +225,12 @@ export function GroupDetailScreen({ group, userId, displayName, onBack, onLeft }
   </KeyboardAvoidingView>;
 }
 
-function MessageRow({ message, previous, currentUserId, onMoviePress, onRetry }: { message: Message | PendingMessage; previous?: Message | PendingMessage; currentUserId: string; onMoviePress: (groupMovieId: string) => void; onRetry?: () => void }) {
+function MessageRow({ message, previous, currentUserId, deletingRecommendation, onMoviePress, onDeleteRecommendation, onRetry }: { message: Message | PendingMessage; previous?: Message | PendingMessage; currentUserId: string; deletingRecommendation: boolean; onMoviePress: (groupMovieId: string) => void; onDeleteRecommendation: (message: MovieRecommendationMessage) => void; onRetry?: () => void }) {
+  const { t } = useLocale();
   const outgoing = message.authorId === currentUserId;
   const showDate = !previous || dayKey(previous.createdAt) !== dayKey(message.createdAt);
   const isMovie = message.type === 'movie_recommendation';
-  return <View>{showDate ? <Text style={styles.date}>{formatDate(message.createdAt)}</Text> : null}<View style={[styles.row, outgoing && styles.outgoing]}>{isMovie ? <View style={[styles.recommendationShell, outgoing && styles.outgoingRecommendation]}><Text style={styles.author}>{outgoing ? 'You' : message.authorDisplayNameSnapshot}</Text><MovieCard movie={message.movie} note={message.text} onPress={() => onMoviePress(message.groupMovieId)} /><Text style={styles.time}>{formatTime(message.createdAt)}</Text></View> : <View style={[styles.bubble, outgoing && styles.outgoingBubble]}><Text style={styles.author}>{outgoing ? 'You' : message.authorDisplayNameSnapshot}</Text><Text style={styles.body}>{message.text}</Text><Text style={styles.time}>{formatTime(message.createdAt)}{('status' in message && message.status === 'failed') ? '  Failed - tap retry' : ('status' in message && message.status === 'sending') ? '  Sending...' : ''}</Text>{onRetry ? <Pressable onPress={onRetry}><Text style={styles.retry}>Retry</Text></Pressable> : null}</View>}</View></View>;
+  return <View>{showDate ? <Text style={styles.date}>{formatDate(message.createdAt)}</Text> : null}<View style={[styles.row, outgoing && styles.outgoing]}>{isMovie ? <View style={[styles.recommendationShell, outgoing && styles.outgoingRecommendation]}><Text style={styles.author}>{outgoing ? 'You' : message.authorDisplayNameSnapshot}</Text><MovieCard movie={message.movie} note={message.text} onPress={() => onMoviePress(message.groupMovieId)} /><View style={styles.movieCardFooter}><Text style={styles.time}>{formatTime(message.createdAt)}</Text>{outgoing ? <Pressable accessibilityRole="button" accessibilityLabel={t('deleteRecommendation')} disabled={deletingRecommendation} onPress={() => onDeleteRecommendation(message)}><Text style={styles.deleteAction}>{deletingRecommendation ? t('deletingRecommendation') : t('deleteRecommendation')}</Text></Pressable> : null}</View></View> : <View style={[styles.bubble, outgoing && styles.outgoingBubble]}><Text style={styles.author}>{outgoing ? 'You' : message.authorDisplayNameSnapshot}</Text><Text style={styles.body}>{message.text}</Text><Text style={styles.time}>{formatTime(message.createdAt)}{('status' in message && message.status === 'failed') ? '  Failed - tap retry' : ('status' in message && message.status === 'sending') ? '  Sending...' : ''}</Text>{onRetry ? <Pressable onPress={onRetry}><Text style={styles.retry}>Retry</Text></Pressable> : null}</View>}</View></View>;
 }
 
 const compareMessages = (left: Message | PendingMessage, right: Message | PendingMessage) => (left.createdAt?.toMillis() ?? Number.MAX_SAFE_INTEGER) - (right.createdAt?.toMillis() ?? Number.MAX_SAFE_INTEGER) || left.id.localeCompare(right.id);
@@ -235,5 +257,6 @@ const styles = StyleSheet.create({
   headerTitle: { flex: 1 }, title: { color: '#17313B', fontSize: 24, fontWeight: '800' }, subtitle: { color: '#52656B', fontSize: 13, marginTop: 2 }, headerAction: { color: '#C05640', fontWeight: '800', padding: 12 },
   messages: { gap: 8, paddingBottom: 12 }, status: { color: '#52656B', padding: 24, textAlign: 'center' }, error: { color: '#A3372C', padding: 8, textAlign: 'center' }, date: { color: '#52656B', fontSize: 12, marginVertical: 10, textAlign: 'center' },
   row: { alignItems: 'flex-start', flexDirection: 'row' }, outgoing: { justifyContent: 'flex-end' }, bubble: { backgroundColor: '#FFFFFF', borderRadius: 14, maxWidth: '82%', padding: 12 }, outgoingBubble: { backgroundColor: '#DCE9E5' }, author: { color: '#C05640', fontSize: 12, fontWeight: '800', marginBottom: 4 }, body: { color: '#17313B', fontSize: 16, lineHeight: 22 }, time: { color: '#6D7C7D', fontSize: 11, marginTop: 5 }, retry: { color: '#A3372C', fontSize: 12, fontWeight: '800', marginTop: 5 },
+  movieCardFooter: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' }, deleteAction: { color: '#A3372C', fontSize: 12, fontWeight: '700', paddingHorizontal: 6, paddingVertical: 4 },
   newMessages: { alignSelf: 'center', backgroundColor: '#174A5B', borderRadius: 16, bottom: 92, paddingHorizontal: 14, paddingVertical: 8, position: 'absolute' }, newMessagesText: { color: '#FFFFFF', fontWeight: '700' }, composer: { alignItems: 'flex-end', backgroundColor: '#FFFFFF', borderRadius: 14, flexDirection: 'row', gap: 8, padding: 8 }, input: { color: '#17313B', flex: 1, maxHeight: 100, padding: 8 }, send: { backgroundColor: '#174A5B', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11 }, sendDisabled: { backgroundColor: '#A7B5B5' }, sendText: { color: '#FFFFFF', fontWeight: '800' }, actions: { flexDirection: 'row', gap: 8, paddingTop: 8 },
 });

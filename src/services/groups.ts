@@ -5,6 +5,7 @@ import {
   orderBy,
   query,
   collection,
+  where,
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../firebase';
@@ -17,6 +18,12 @@ export type Group = {
   updatedAt?: unknown;
   lastActivityAt?: unknown;
   lastActivityPreview?: string;
+};
+
+export type GroupMember = {
+  id: string;
+  displayName: string;
+  role: 'owner' | 'member';
 };
 
 type CreateGroupResponse = {
@@ -61,6 +68,23 @@ export const listUserGroups = async (userId: string): Promise<Group[]> => {
 export const getGroup = async (groupId: string) => {
   const snapshot = await getDoc(doc(db, 'groups', groupId));
   return snapshot.exists() ? ({ id: snapshot.id, ...snapshot.data() } as Group) : null;
+};
+
+export const listActiveGroupMembers = async (groupId: string): Promise<GroupMember[]> => {
+  const members = await getDocs(query(
+    collection(db, 'groups', groupId, 'members'),
+    where('status', '==', 'active'),
+  ));
+  return members.docs.map((member) => {
+    const data = member.data();
+    return {
+      id: member.id,
+      displayName: typeof data.displayNameSnapshot === 'string' && data.displayNameSnapshot.trim()
+        ? data.displayNameSnapshot
+        : 'FilmChat member',
+      role: (data.role === 'owner' ? 'owner' : 'member') as GroupMember['role'],
+    };
+  }).sort((left, right) => left.displayName.localeCompare(right.displayName));
 };
 
 const timestampMillis = (value: unknown) => value && typeof value === 'object' && 'toMillis' in value

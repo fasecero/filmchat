@@ -6,7 +6,7 @@ export function Button({ label, onPress, secondary = false }: {
   secondary?: boolean;
 }) {
   return (
-    <Pressable onPress={onPress} style={[styles.button, secondary && styles.secondary]}>
+    <Pressable accessibilityRole="button" onPress={onPress} style={[styles.button, secondary && styles.secondary]}>
       <Text style={[styles.label, secondary && styles.secondaryLabel]}>{label}</Text>
     </Pressable>
   );

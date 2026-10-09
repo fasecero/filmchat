@@ -9,7 +9,12 @@ jest.mock('../src/services/auth', () => ({
 }));
 jest.mock('../src/services/groups', () => ({
   listUserGroups: jest.fn().mockResolvedValue([]),
+  listActiveGroupMembers: jest.fn().mockResolvedValue([]),
   createGroup: jest.fn(),
+}));
+jest.mock('../src/services/user', () => ({
+  getUserDocument: jest.fn().mockResolvedValue(null),
+  updateDisplayName: jest.fn(),
 }));
 jest.mock('../src/services/invites', () => ({
   previewInvite: jest.fn(),

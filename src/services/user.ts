@@ -5,7 +5,9 @@ import {
   setDoc,
   updateDoc,
 } from 'firebase/firestore';
-import { db } from '../firebase';
+import { updateProfile } from 'firebase/auth';
+import { httpsCallable } from 'firebase/functions';
+import { auth, db, functions } from '../firebase';
 
 export type UserDocument = {
   id: string;
@@ -45,4 +47,17 @@ export const updateUserDocument = async (userId: string, updates: Partial<{
     ...updates,
     updatedAt: serverTimestamp(),
   });
+};
+
+export const updateDisplayName = async (userId: string, displayName: string) => {
+  const normalizedName = displayName.trim();
+  if (!normalizedName || normalizedName.length > 120) {
+    throw new Error('Display name must be between 1 and 120 characters.');
+  }
+  const callable = httpsCallable<{ displayName: string }, { displayName: string }>(functions, 'updateDisplayName');
+  const response = await callable({ displayName: normalizedName });
+  if (auth.currentUser?.uid === userId) {
+    await updateProfile(auth.currentUser, { displayName: response.data.displayName });
+  }
+  return response.data.displayName;
 };

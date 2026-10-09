@@ -291,6 +291,7 @@ export const recommendMovie = onCall({ secrets: [tmdbReadAccessToken] }, async (
 		memberRef.get(),
 		getTmdbMovie(externalMovieId),
 	]);
+
 	if (!groupSnapshot.exists || !memberSnapshot.exists || memberSnapshot.data()?.status !== 'active') {
 		throw new HttpsError('permission-denied', 'Active group membership is required.');
 	}
@@ -389,6 +390,34 @@ export const recommendMovie = onCall({ secrets: [tmdbReadAccessToken] }, async (
 	});
 
 	return { messageId, clientRequestId, movie, groupMovieId: groupMovieId(movie), note: note || null };
+});
+
+export const updateDisplayName = onCall(async (request) => {
+	const uid = requireAuth(request);
+	const displayName = requireBoundedString(request.data?.displayName, 'Display name', 120);
+	const userRef = firestore.collection('users').doc(uid);
+	const userSnapshot = await userRef.get();
+	if (!userSnapshot.exists) {
+		throw new HttpsError('failed-precondition', 'A user profile is required.');
+	}
+
+	const groupReferences = await userRef.collection('groups').where('status', '==', 'active').get();
+	const membershipSnapshots = await Promise.all(groupReferences.docs.map((groupReference) =>
+		firestore.doc(`groups/${groupReference.id}/members/${uid}`).get()));
+	const activeMemberships = membershipSnapshots.filter((membership) =>
+		membership.exists && membership.data()?.status === 'active');
+	if (activeMemberships.length > 499) {
+		throw new HttpsError('resource-exhausted', 'Too many active group memberships to update.');
+	}
+
+	const batch = firestore.batch();
+	const timestamp = FieldValue.serverTimestamp();
+	batch.update(userRef, { displayName, updatedAt: timestamp });
+	activeMemberships.forEach((membership) => {
+		batch.update(membership.ref, { displayNameSnapshot: displayName, updatedAt: timestamp });
+	});
+	await batch.commit();
+	return { displayName };
 });
 
 export const deleteMovieRecommendation = onCall(async (request) => {

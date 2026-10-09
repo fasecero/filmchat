@@ -16,6 +16,7 @@ import {
   type WatchNote,
 } from '../src/services/groupMovies';
 import { setMovieSeenStatus, subscribeToMovieSeenStatus } from '../src/services/movieSeenStatus';
+import { listActiveGroupMembers } from '../src/services/groups';
 import {
   deleteMovieRecommendation,
   loadOlderMessages,
@@ -66,6 +67,10 @@ jest.mock('../src/services/movieSeenStatus', () => ({
   subscribeToMovieSeenStatus: jest.fn(),
 }));
 
+jest.mock('../src/services/groups', () => ({
+  listActiveGroupMembers: jest.fn(),
+}));
+
 jest.mock('../src/services/messages', () => ({
   deleteMovieRecommendation: jest.fn(),
   loadOlderMessages: jest.fn(),
@@ -98,6 +103,7 @@ beforeEach(() => {
   seenSubscriptions.length = 0;
   messageSubscriptions.length = 0;
   jest.clearAllMocks();
+  jest.mocked(listActiveGroupMembers).mockResolvedValue([]);
   jest.mocked(enrichGroupMovieMetadata).mockResolvedValue({ groupId: 'group-1', groupMovieId: 'tmdb_603', originalTitle: null, imdbId: null });
   jest.mocked(loadOlderMessages).mockResolvedValue({ messages: [], cursor: null, hasMore: false });
   jest.mocked(loadRecommendationHistory).mockResolvedValue([]);
@@ -149,6 +155,42 @@ describe('GroupDetailScreen default section', () => {
     expect(screen.getByText('Movies')).toBeOnTheScreen();
     expect(screen.getByText('Movies recommended in this group will appear here.')).toBeOnTheScreen();
     expect(screen.queryByText('No messages yet. Start the conversation.')).toBeNull();
+  });
+
+  it('opens the active Members screen and returns to the previous group section', async () => {
+    jest.mocked(listActiveGroupMembers).mockResolvedValue([
+      { id: 'owner', displayName: 'Group Owner', role: 'owner' },
+      { id: 'viewer', displayName: 'Current Member', role: 'member' },
+    ]);
+    render(
+      <GroupDetailScreen
+        group={{ id: 'group-1', name: 'Weekend Watch', ownerId: 'owner' }}
+        userId="viewer"
+        displayName="Viewer"
+        onBack={jest.fn()}
+        onLeft={jest.fn()}
+      />,
+    );
+    await finishInitialLoad();
+    fireEvent.press(screen.getByText('Chat'));
+    act(() => messageSubscriptions[0].onMessages([{
+      id: 'existing-chat-message',
+      type: 'text',
+      authorId: 'other-user',
+      authorDisplayNameSnapshot: 'Other member',
+      text: 'This chat message remains visible',
+      createdAt: null,
+      clientRequestId: 'existing-chat-request',
+    }]));
+    fireEvent.press(screen.getByRole('button', { name: 'Members' }));
+
+    expect(await screen.findByText('Group Owner')).toBeOnTheScreen();
+    expect(screen.getByText('Owner')).toBeOnTheScreen();
+    expect(screen.getByText('Current Member')).toBeOnTheScreen();
+    expect(screen.getByText('Member')).toBeOnTheScreen();
+    fireEvent.press(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByPlaceholderText('Write a message')).toBeOnTheScreen();
+    expect(screen.getByText('This chat message remains visible')).toBeOnTheScreen();
   });
 
   it('lets the author confirm deletion of their chat recommendation and removes the card', async () => {
@@ -375,6 +417,13 @@ describe('GroupMoviesScreen realtime rating aggregates', () => {
     expect(screen.getByText('Sort: Date added')).toBeOnTheScreen();
     fireEvent.press(screen.getByText('Sort: Date added'));
     expect(screen.getByText('Sort: Watch notes')).toBeOnTheScreen();
+  });
+
+  it('exposes a Groups-list action on Movie List', () => {
+    const onBackToGroups = jest.fn();
+    render(<GroupMoviesScreen groupId="group-1" groupName="Weekend Watch" userId="viewer" onBack={jest.fn()} onBackToGroups={onBackToGroups} onAddMovie={jest.fn()} onSelect={jest.fn()} />);
+    fireEvent.press(screen.getByText('‹ Your groups'));
+    expect(onBackToGroups).toHaveBeenCalledTimes(1);
   });
 
   it('filters movies by the current user seen status and updates when statuses change', () => {

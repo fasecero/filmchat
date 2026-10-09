@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Image, KeyboardAvoidingView, Platform, Pressable, Share, Text, TextInput, View, StyleSheet } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Image, Keyboard, KeyboardAvoidingView, Platform, Pressable, Share, Text, TextInput, View, StyleSheet } from 'react-native';
 import { Button } from '../../components/auth/Button';
 import { TmdbAttribution } from '../../components/TmdbAttribution';
 import { useLocale } from '../../i18n';
@@ -21,14 +21,16 @@ import {
 import { searchMovies, recommendMovie } from '../../services/movies';
 import { GroupMoviesScreen } from './GroupMoviesScreen';
 import { GroupMovieDetailScreen } from './GroupMovieDetailScreen';
+import { GroupMembersScreen } from './GroupMembersScreen';
 
 type PendingMessage = Message & { status: 'sending' | 'failed' };
 
-export function GroupDetailScreen({ group, userId, displayName, onBack, onLeft }: {
+export function GroupDetailScreen({ group, userId, displayName, onBack, onBackToGroups = onBack, onLeft }: {
   group: Group;
   userId: string;
   displayName: string;
   onBack: () => void;
+  onBackToGroups?: () => void;
   onLeft: () => void;
 }) {
   const { t } = useLocale();
@@ -50,12 +52,25 @@ export function GroupDetailScreen({ group, userId, displayName, onBack, onLeft }
   const [leaving, setLeaving] = useState(false);
   const [leaveError, setLeaveError] = useState<string | null>(null);
   const [deletingRecommendationId, setDeletingRecommendationId] = useState<string | null>(null);
-  const [section, setSection] = useState<'chat' | 'movies'>('movies');
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [section, setSection] = useState<'chat' | 'movies' | 'members'>('movies');
+  const [sectionBeforeMembers, setSectionBeforeMembers] = useState<'chat' | 'movies'>('chat');
   const [selectedMovieId, setSelectedMovieId] = useState<string | null>(null);
   const cursor = useRef<Parameters<typeof loadOlderMessages>[1]>(null);
   const listRef = useRef<FlatList<Message | PendingMessage>>(null);
   const nearBottomRef = useRef(true);
   const loadingOlderRef = useRef(false);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSubscription = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
+    const hideSubscription = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
 
   const scrollToBottom = (animated = true) => {
     requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated }));
@@ -197,16 +212,36 @@ export function GroupDetailScreen({ group, userId, displayName, onBack, onLeft }
       void leaveGroup(group.id).then(onLeft).catch(() => setLeaveError(t('leaveGroupError'))).finally(() => setLeaving(false));
     } },
   ]);
+  const openMembers = () => {
+    Keyboard.dismiss();
+    setSectionBeforeMembers(section === 'members' ? 'chat' : section);
+    setSection('members');
+  };
+  const openMovies = () => {
+    Keyboard.dismiss();
+    setSection('movies');
+  };
   if (selectedMovieId) return <GroupMovieDetailScreen groupId={group.id} groupMovieId={selectedMovieId} userId={userId} onBack={() => setSelectedMovieId(null)} />;
-  if (section === 'movies') return <GroupMoviesScreen groupId={group.id} groupName={group.name} userId={userId} onBack={() => setSection('chat')} onAddMovie={() => { setSection('chat'); setMovieMode('search'); setMovieQuery(''); setMovieError(null); }} onSelect={(movie) => setSelectedMovieId(movie.id)} />;
-  return <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
-    <View style={styles.header}><Button label={t('back')} onPress={onBack} secondary /><View style={styles.headerTitle}><Text style={styles.title}>{group.name}</Text><Text style={styles.subtitle}>{t('privateConversation')}</Text></View><Pressable onPress={() => setSection('movies')}><Text style={styles.headerAction}>{t('movies')}</Text></Pressable><Pressable onPress={() => void shareInvite()}><Text style={styles.headerAction}>{t('share')}</Text></Pressable></View>
+  if (section === 'members') return <GroupMembersScreen groupId={group.id} groupName={group.name} onBack={() => setSection(sectionBeforeMembers)} />;
+  if (section === 'movies') return <GroupMoviesScreen groupId={group.id} groupName={group.name} userId={userId} onBack={() => setSection('chat')} onBackToGroups={onBackToGroups} onAddMovie={() => { setSection('chat'); setMovieMode('search'); setMovieQuery(''); setMovieError(null); }} onSelect={(movie) => setSelectedMovieId(movie.id)} />;
+  return <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.container}>
+    <View style={styles.header}>
+      <Button label={t('back')} onPress={onBack} secondary />
+      <View style={styles.headerTitle}><Text numberOfLines={1} style={styles.title}>{group.name}</Text><Text style={styles.subtitle}>{t('privateConversation')}</Text></View>
+    </View>
+    <View style={styles.navigationRow}>
+      <Pressable accessibilityRole="button" onPress={openMovies} style={styles.navigationAction}><Text style={styles.navigationText}>{t('movies')}</Text></Pressable>
+      <Pressable accessibilityRole="button" onPress={openMembers} style={styles.navigationAction}><Text style={styles.navigationText}>{t('members')}</Text></Pressable>
+      <Pressable accessibilityRole="button" onPress={() => void shareInvite()} style={styles.navigationAction}><Text style={styles.navigationText}>{t('share')}</Text></Pressable>
+    </View>
     {error ? <Text style={styles.error}>{error}</Text> : null}{leaveError ? <Text style={styles.error}>{leaveError}</Text> : null}
     {loading ? <Text style={styles.status}>{t('loadingConversation')}</Text> : <FlatList
       ref={listRef}
       data={allMessages}
       keyExtractor={(item) => item.id}
+      style={styles.messageList}
       contentContainerStyle={styles.messages}
+      keyboardShouldPersistTaps="handled"
       onScroll={(event) => {
         const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
         const atBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height) < 48;
@@ -220,8 +255,10 @@ export function GroupDetailScreen({ group, userId, displayName, onBack, onLeft }
     />}
     {hasNewMessages ? <Pressable style={styles.newMessages} onPress={() => { scrollToBottom(); setHasNewMessages(false); }}><Text style={styles.newMessagesText}>{t('newMessagesButton')}</Text></Pressable> : null}
     {movieMode === 'search' ? <MovieSearch query={movieQuery} results={movieResults} loading={movieLoading} error={movieError} onQuery={setMovieQuery} onRetry={() => setMovieQuery((value) => `${value} ` .trim())} onSelect={(movie) => { setSelectedMovie(movie); setMovieMode('compose'); setMovieError(null); }} onClose={() => setMovieMode('closed')} /> : movieMode === 'compose' && selectedMovie ? <MovieComposer movie={selectedMovie} note={movieNote} sending={movieSending} error={movieError} onNote={setMovieNote} onSend={() => void submitRecommendation()} onBack={() => setMovieMode('search')} /> : <View style={styles.composer}><Pressable onPress={() => { setMovieMode('search'); setMovieQuery(''); setMovieError(null); }} style={styles.movieAction}><Text style={styles.movieActionText}>{t('movie')}</Text></Pressable><TextInput value={draft} onChangeText={setDraft} placeholder={t('writeMessage')} multiline style={styles.input} maxLength={2000} /><Pressable disabled={!draft.trim()} onPress={() => void send()} style={[styles.send, !draft.trim() && styles.sendDisabled]}><Text style={styles.sendText}>{t('send')}</Text></Pressable></View>}
-    <TmdbAttribution />
-    <View style={styles.actions}><Button label={leaving ? t('leaving') : t('leaveGroup')} onPress={confirmLeave} secondary /><Button label={t('signOut')} onPress={() => void signOutUser()} secondary /></View>
+    {!keyboardVisible ? <>
+      <TmdbAttribution />
+      <View style={styles.actions}><Button label={leaving ? t('leaving') : t('leaveGroup')} onPress={confirmLeave} secondary /><Button label={t('signOut')} onPress={() => void signOutUser()} secondary /></View>
+    </> : null}
   </KeyboardAvoidingView>;
 }
 
@@ -253,9 +290,13 @@ function MovieComposer({ movie, note, sending, error, onNote, onSend, onBack }: 
 
 const styles = StyleSheet.create({
   container: { backgroundColor: '#F5F1E8', flex: 1, padding: 16 }, moviePanel: { backgroundColor: '#FFFFFF', borderRadius: 14, gap: 8, padding: 12 }, moviePanelHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' }, panelTitle: { color: '#17313B', fontSize: 18, fontWeight: '800' }, searchInput: { borderColor: '#C7D0CD', borderRadius: 10, borderWidth: 1, padding: 10 }, result: { borderBottomColor: '#E4E9E6', borderBottomWidth: 1, padding: 10 }, movieMeta: { color: '#6D7C7D', marginTop: 2 }, movieCard: { alignItems: 'flex-start', backgroundColor: '#F8FBF9', borderColor: '#B9CDC5', borderRadius: 9, borderWidth: 1, flexDirection: 'row', gap: 10, padding: 8, width: '100%' }, poster: { aspectRatio: 0.72, borderRadius: 5, height: 100, width: 72 }, posterFallback: { alignItems: 'center', backgroundColor: '#D5DFDA', borderRadius: 5, height: 100, justifyContent: 'center', width: 72 }, posterFallbackText: { color: '#52656B', fontSize: 12, fontWeight: '700' }, movieInfo: { flex: 1, flexShrink: 1, gap: 3, justifyContent: 'center', minWidth: 0 }, movieTitle: { color: '#17313B', fontSize: 14, fontWeight: '800', lineHeight: 18 }, movieNote: { color: '#52656B', fontSize: 13, lineHeight: 17 }, saved: { color: '#28705C', fontSize: 11, fontWeight: '700' }, recommendationShell: { alignSelf: 'flex-start', flexShrink: 1, maxWidth: '88%', minWidth: 0, width: '88%' }, outgoingRecommendation: {}, noteInput: { borderColor: '#C7D0CD', borderRadius: 10, borderWidth: 1, minHeight: 70, padding: 10 }, noteCount: { color: '#6D7C7D', fontSize: 12, textAlign: 'right' }, movieAction: { backgroundColor: '#E8D8C8', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 11 }, movieActionText: { color: '#7B442E', fontWeight: '800' },
-  header: { alignItems: 'center', flexDirection: 'row', gap: 12, paddingBottom: 8 },
-  headerTitle: { flex: 1 }, title: { color: '#17313B', fontSize: 24, fontWeight: '800' }, subtitle: { color: '#52656B', fontSize: 13, marginTop: 2 }, headerAction: { color: '#C05640', fontWeight: '800', padding: 12 },
-  messages: { gap: 8, paddingBottom: 12 }, status: { color: '#52656B', padding: 24, textAlign: 'center' }, error: { color: '#A3372C', padding: 8, textAlign: 'center' }, date: { color: '#52656B', fontSize: 12, marginVertical: 10, textAlign: 'center' },
+  header: { alignItems: 'center', flexDirection: 'row', gap: 10, paddingBottom: 4 },
+  headerTitle: { flex: 1, minWidth: 0 }, title: { color: '#17313B', fontSize: 24, fontWeight: '800' }, subtitle: { color: '#52656B', fontSize: 13, marginTop: 2 }, headerAction: { color: '#C05640', fontWeight: '800', padding: 12 },
+  navigationRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  navigationAction: { alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 9, flex: 1, marginHorizontal: 3, paddingHorizontal: 6, paddingVertical: 8 },
+  navigationText: { color: '#C05640', fontSize: 13, fontWeight: '800' },
+  messageList: { flex: 1, minHeight: 0 },
+  messages: { flexGrow: 1, gap: 8, paddingBottom: 12 }, status: { color: '#52656B', padding: 24, textAlign: 'center' }, error: { color: '#A3372C', padding: 8, textAlign: 'center' }, date: { color: '#52656B', fontSize: 12, marginVertical: 10, textAlign: 'center' },
   row: { alignItems: 'flex-start', flexDirection: 'row' }, outgoing: { justifyContent: 'flex-end' }, bubble: { backgroundColor: '#FFFFFF', borderRadius: 14, maxWidth: '82%', padding: 12 }, outgoingBubble: { backgroundColor: '#DCE9E5' }, author: { color: '#C05640', fontSize: 12, fontWeight: '800', marginBottom: 4 }, body: { color: '#17313B', fontSize: 16, lineHeight: 22 }, time: { color: '#6D7C7D', fontSize: 11, marginTop: 5 }, retry: { color: '#A3372C', fontSize: 12, fontWeight: '800', marginTop: 5 },
   movieCardFooter: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' }, deleteAction: { color: '#A3372C', fontSize: 12, fontWeight: '700', paddingHorizontal: 6, paddingVertical: 4 },
   newMessages: { alignSelf: 'center', backgroundColor: '#174A5B', borderRadius: 16, bottom: 92, paddingHorizontal: 14, paddingVertical: 8, position: 'absolute' }, newMessagesText: { color: '#FFFFFF', fontWeight: '700' }, composer: { alignItems: 'flex-end', backgroundColor: '#FFFFFF', borderRadius: 14, flexDirection: 'row', gap: 8, padding: 8 }, input: { color: '#17313B', flex: 1, maxHeight: 100, padding: 8 }, send: { backgroundColor: '#174A5B', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11 }, sendDisabled: { backgroundColor: '#A7B5B5' }, sendText: { color: '#FFFFFF', fontWeight: '800' }, actions: { flexDirection: 'row', gap: 8, paddingTop: 8 },

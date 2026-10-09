@@ -8,7 +8,7 @@ import { setMovieSeenStatus, subscribeToMovieSeenStatus } from '../../services/m
 type SortMode = 'rating' | 'date' | 'watchNotes';
 type SeenFilter = 'all' | 'unseen' | 'seen';
 
-export function GroupMoviesScreen({ groupId, groupName, userId, onBack, onAddMovie, onSelect }: { groupId: string; groupName: string; userId: string; onBack: () => void; onAddMovie: () => void; onSelect: (movie: GroupMovie) => void }) {
+export function GroupMoviesScreen({ groupId, groupName, userId, onBack, onBackToGroups = () => undefined, onAddMovie, onSelect }: { groupId: string; groupName: string; userId: string; onBack: () => void; onBackToGroups?: () => void; onAddMovie: () => void; onSelect: (movie: GroupMovie) => void }) {
   const { t } = useLocale();
   const [movies, setMovies] = useState<GroupMovie[]>([]);
   const [watchNoteCounts, setWatchNoteCounts] = useState<Record<string, number>>({});
@@ -97,6 +97,7 @@ export function GroupMoviesScreen({ groupId, groupName, userId, onBack, onAddMov
   }), [sortedMovies, seenByMovie, seenFilter]);
 
   return <View style={styles.container}>
+    <Pressable accessibilityRole="button" onPress={onBackToGroups} style={styles.backToGroups}><Text style={styles.backToGroupsText}>‹ {t('yourGroups')}</Text></Pressable>
     <View style={styles.header}><Pressable onPress={onBack}><Text style={styles.action}>{t('chat')}</Text></Pressable><View style={styles.headerTitle}><Text style={styles.title}>{groupName}</Text><Text style={styles.subtitle}>{t('movies')}</Text></View><Pressable onPress={onAddMovie}><Text style={styles.action}>{t('addMovie')}</Text></Pressable></View>
     <View style={styles.filterRow}>
       {([
@@ -150,6 +151,8 @@ const styles = StyleSheet.create({
   title: { color: '#17313B', fontSize: 22, fontWeight: '800', textAlign: 'center' },
   subtitle: { color: '#52656B', fontSize: 12, fontWeight: '700', marginTop: 2 },
   action: { color: '#C05640', fontWeight: '800', padding: 10 },
+  backToGroups: { alignSelf: 'flex-start', marginBottom: 8, paddingHorizontal: 6, paddingVertical: 4 },
+  backToGroupsText: { color: '#52656B', fontSize: 12, fontWeight: '700' },
   filterRow: { backgroundColor: '#E7E2D7', borderRadius: 12, flexDirection: 'row', gap: 4, marginBottom: 10, padding: 4 },
   filterButton: { alignItems: 'center', borderRadius: 9, flex: 1, justifyContent: 'center', minHeight: 38, paddingHorizontal: 8 },
   filterButtonSelected: { backgroundColor: '#28705C' },

@@ -20,6 +20,10 @@ describe('i18n locale detection', () => {
     expect(messages.en.filterAll).toBe('All');
     expect(messages.en.filterUnseen).toBe('Unseen');
     expect(messages.en.filterSeen).toBe('Seen');
+    expect(messages.en.profile).toBe('Profile');
+    expect(messages.en.members).toBe('Members');
+    expect(messages.en.owner).toBe('Owner');
+    expect(messages.en.groupMember).toBe('Member');
 
     expect(messages.es.addMovie).toBe('+ Película');
     expect(messages.es.sortBy).toBe('Ordenar');
@@ -29,5 +33,9 @@ describe('i18n locale detection', () => {
     expect(messages.es.filterAll).toBe('Todas');
     expect(messages.es.filterUnseen).toBe('No vistas');
     expect(messages.es.filterSeen).toBe('Vistas');
+    expect(messages.es.profile).toBe('Perfil');
+    expect(messages.es.members).toBe('Miembros');
+    expect(messages.es.owner).toBe('Propietario');
+    expect(messages.es.groupMember).toBe('Miembro');
   });
 });

@@ -1,5 +1,5 @@
 import { getFirestore } from '../../functions/node_modules/firebase-admin/lib/firestore/index.js';
-import { deleteMovieRecommendation, enrichGroupMovieMetadata as enrichGroupMovieMetadataCallable, recommendMovie, saveWatchNote, setMovieSeenStatus } from '../../functions/src/index';
+import { deleteMovieRecommendation, enrichGroupMovieMetadata as enrichGroupMovieMetadataCallable, recommendMovie, saveWatchNote, setMovieSeenStatus, updateDisplayName } from '../../functions/src/index';
 import * as tmdbModule from '../../functions/src/tmdb';
 
 const firestore = getFirestore();
@@ -65,6 +65,56 @@ describe('saveWatchNote callable', () => {
 
     await expect((await noteReference.get()).exists).toBe(false);
     await expect((await movieReference.get()).data()).toMatchObject({ ratingCount: 0, ratingSum: 0, ratingAverage: null });
+  });
+});
+
+describe('updateDisplayName callable', () => {
+  const profileUserId = 'display-name-update-user';
+  const activeGroupId = 'display-name-active-group';
+  const inactiveGroupId = 'display-name-inactive-group';
+  const userRef = firestore.doc(`users/${profileUserId}`);
+  const activeMembershipRef = firestore.doc(`groups/${activeGroupId}/members/${profileUserId}`);
+  const inactiveMembershipRef = firestore.doc(`groups/${inactiveGroupId}/members/${profileUserId}`);
+  const historicMessageRef = firestore.doc(`groups/${activeGroupId}/messages/historic-message`);
+
+  const callUpdateDisplayName = (displayName: unknown, uid: string | null = profileUserId) => updateDisplayName.run({
+    data: { displayName },
+    auth: uid ? { uid } : null,
+  } as unknown as Parameters<typeof updateDisplayName.run>[0]);
+
+  beforeEach(async () => {
+    await userRef.set({ displayName: 'Old Name', email: 'old@example.com' });
+    await firestore.doc(`users/${profileUserId}/groups/${activeGroupId}`).set({ status: 'active' });
+    await firestore.doc(`users/${profileUserId}/groups/${inactiveGroupId}`).set({ status: 'left' });
+    await activeMembershipRef.set({ userId: profileUserId, displayNameSnapshot: 'Old Name', role: 'owner', status: 'active' });
+    await inactiveMembershipRef.set({ userId: profileUserId, displayNameSnapshot: 'Old Name', role: 'member', status: 'left' });
+    await historicMessageRef.set({ authorDisplayNameSnapshot: 'Old Name', text: 'Earlier message' });
+  });
+
+  afterEach(async () => {
+    await Promise.all([
+      userRef.delete(),
+      firestore.doc(`users/${profileUserId}/groups/${activeGroupId}`).delete(),
+      firestore.doc(`users/${profileUserId}/groups/${inactiveGroupId}`).delete(),
+      activeMembershipRef.delete(),
+      inactiveMembershipRef.delete(),
+      historicMessageRef.delete(),
+    ]);
+  });
+
+  it('updates the profile and active membership names without rewriting historical content', async () => {
+    await expect(callUpdateDisplayName('  New Name  ')).resolves.toEqual({ displayName: 'New Name' });
+    expect((await userRef.get()).data()).toMatchObject({ displayName: 'New Name', email: 'old@example.com' });
+    expect((await activeMembershipRef.get()).data()).toMatchObject({ displayNameSnapshot: 'New Name', status: 'active' });
+    expect((await inactiveMembershipRef.get()).data()).toMatchObject({ displayNameSnapshot: 'Old Name', status: 'left' });
+    expect((await historicMessageRef.get()).data()).toMatchObject({ authorDisplayNameSnapshot: 'Old Name' });
+  });
+
+  it('rejects unauthenticated, blank, and overlong names without changing the profile', async () => {
+    await expect(callUpdateDisplayName('New Name', null)).rejects.toMatchObject({ code: 'unauthenticated' });
+    await expect(callUpdateDisplayName('   ')).rejects.toMatchObject({ code: 'invalid-argument' });
+    await expect(callUpdateDisplayName('x'.repeat(121))).rejects.toMatchObject({ code: 'invalid-argument' });
+    expect((await userRef.get()).data()?.displayName).toBe('Old Name');
   });
 });
 

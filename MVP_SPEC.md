@@ -106,7 +106,7 @@ When the same catalog movie is recommended again in the same group, create a new
 ### Accounts
 
 - Support email/password sign-up, sign-in, sign-out, and Firebase's normal password-reset flow.
-- Display name is required at sign-up and immutable in this MVP. It is copied into message/recommendation author snapshots for resilient display.
+- Display name is required at sign-up and editable from the user's profile. It is copied into message/recommendation author snapshots for resilient historical display; profile changes update active group membership names for future member lists and activity.
 - Do not build social profiles, contact discovery, or account deletion UI.
 
 ### Groups and membership
@@ -116,7 +116,7 @@ When the same catalog movie is recommended again in the same group, create a new
 - Group membership must be checked from server-authoritative membership data, never trusted from a client-supplied `memberIds` array.
 - The owner may leave in this MVP; ownership remains historical and no transfer logic is required. The group remains usable for other active members.
 - An active member can leave a group from group settings, after a confirmation. It disappears from their group list and access is removed immediately.
-- No member management, kicking, renaming, group deletion, or invite revocation UI is required in the MVP.
+- A read-only Members screen lists active members and identifies the owner. No member management, kicking, renaming groups, group deletion, or invite revocation UI is required in the MVP.
 
 ### Invites
 
@@ -155,9 +155,11 @@ Authentication
 
 Groups (list)
   -> Create group -> Group chat
+  -> Profile -> Edit display name
   -> Invite deep link -> Join confirmation -> Group chat
   -> Group
        Chat tab <-> Movies tab
+      Chat -> Active members list
        Chat -> Movie search -> Selected movie composer -> Chat
        Chat/Movie list -> Group-movie detail
        Group settings -> Leave group / Share invite
@@ -169,11 +171,13 @@ Minimum screens/views:
 | ----------------------- | --------------------------------------------------------------------------------------------------------------- |
 | Welcome/authentication  | Sign in, sign up, reset-password entry point.                                                                   |
 | Groups                  | Active groups ordered by latest activity; create action; empty state.                                           |
+| User profile            | Edit the account display name only; email and password management remain outside this view.                     |
 | Create group            | Group name, validation, Create.                                                                                 |
 | Group chat              | Header (name, share/settings), chronological messages, composer, movie action, Chat/Movies switch.              |
 | Movie search            | Search field, catalog result list, loading/empty/error states.                                                  |
 | Recommendation composer | Selected movie summary, optional note, Send recommendation. May be a modal/sheet.                               |
 | Group movies            | Distinct persistent movies, recommendation count, rating summary, newest/recently-recommended sort.             |
+| Group members           | Read-only list of active members with display names and owner/member roles; no email addresses.                  |
 | Group-movie detail      | Metadata, aggregate, recommendation history, member watch-note editor, and compact member review/platform feed. |
 | Invite join/unavailable | Group name and Join, or safe invalid-link explanation.                                                          |
 | Group settings          | Share invite and Leave group only.                                                                              |

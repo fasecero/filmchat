@@ -16,7 +16,7 @@ import {
   type WatchNote,
 } from '../src/services/groupMovies';
 import { setMovieSeenStatus, subscribeToMovieSeenStatus } from '../src/services/movieSeenStatus';
-import { listActiveGroupMembers } from '../src/services/groups';
+import { getGroup, listActiveGroupMembers } from '../src/services/groups';
 import {
   deleteMovieRecommendation,
   loadOlderMessages,
@@ -68,6 +68,7 @@ jest.mock('../src/services/movieSeenStatus', () => ({
 }));
 
 jest.mock('../src/services/groups', () => ({
+  getGroup: jest.fn(),
   listActiveGroupMembers: jest.fn(),
 }));
 
@@ -103,6 +104,7 @@ beforeEach(() => {
   seenSubscriptions.length = 0;
   messageSubscriptions.length = 0;
   jest.clearAllMocks();
+  jest.mocked(getGroup).mockResolvedValue(null);
   jest.mocked(listActiveGroupMembers).mockResolvedValue([]);
   jest.mocked(enrichGroupMovieMetadata).mockResolvedValue({ groupId: 'group-1', groupMovieId: 'tmdb_603', originalTitle: null, imdbId: null });
   jest.mocked(loadOlderMessages).mockResolvedValue({ messages: [], cursor: null, hasMore: false });
@@ -157,7 +159,7 @@ describe('GroupDetailScreen default section', () => {
     expect(screen.queryByText('No messages yet. Start the conversation.')).toBeNull();
   });
 
-  it('opens the active Members screen and returns to the previous group section', async () => {
+  it('opens Group Properties from the chat title and returns to the chat section', async () => {
     jest.mocked(listActiveGroupMembers).mockResolvedValue([
       { id: 'owner', displayName: 'Group Owner', role: 'owner' },
       { id: 'viewer', displayName: 'Current Member', role: 'member' },
@@ -182,13 +184,15 @@ describe('GroupDetailScreen default section', () => {
       createdAt: null,
       clientRequestId: 'existing-chat-request',
     }]));
-    fireEvent.press(screen.getByRole('button', { name: 'Members' }));
+    fireEvent.press(screen.getByRole('button', { name: 'Group properties' }));
 
-    expect(await screen.findByText('Group Owner')).toBeOnTheScreen();
+    expect(await screen.findByText('Group properties')).toBeOnTheScreen();
+    expect(screen.getByText('Active members')).toBeOnTheScreen();
+    expect(screen.getByText('Group Owner')).toBeOnTheScreen();
     expect(screen.getByText('Owner')).toBeOnTheScreen();
     expect(screen.getByText('Current Member')).toBeOnTheScreen();
     expect(screen.getByText('Member')).toBeOnTheScreen();
-    fireEvent.press(screen.getByRole('button', { name: 'Back' }));
+    fireEvent.press(screen.getByRole('button', { name: 'Chat' }));
     expect(screen.getByPlaceholderText('Write a message')).toBeOnTheScreen();
     expect(screen.getByText('This chat message remains visible')).toBeOnTheScreen();
   });

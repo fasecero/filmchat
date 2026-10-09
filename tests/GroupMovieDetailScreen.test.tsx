@@ -377,6 +377,33 @@ describe('GroupMoviesScreen realtime rating aggregates', () => {
     expect(screen.getByText('Sort: Watch notes')).toBeOnTheScreen();
   });
 
+  it('filters movies by the current user seen status and updates when statuses change', () => {
+    const matrix = movie();
+    const fightClub = { ...movie(), id: 'tmdb_550', externalMovieId: '550', title: 'Fight Club' };
+    render(<GroupMoviesScreen groupId="group-1" groupName="Weekend Watch" userId="viewer" onBack={jest.fn()} onAddMovie={jest.fn()} onSelect={jest.fn()} />);
+
+    act(() => moviesSubscriptions[0].onMovies([matrix, fightClub]));
+    expect(screen.getByText('The Matrix (1999)')).toBeOnTheScreen();
+    expect(screen.getByText('Fight Club (1999)')).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'All' })).toBeOnTheScreen();
+
+    act(() => seenSubscriptions[0].onStatus({ seen: true }));
+    fireEvent.press(screen.getByRole('button', { name: 'Seen' }));
+    expect(screen.getByText('The Matrix (1999)')).toBeOnTheScreen();
+    expect(screen.queryByText('Fight Club (1999)')).toBeNull();
+
+    fireEvent.press(screen.getByRole('button', { name: 'Unseen' }));
+    expect(screen.queryByText('The Matrix (1999)')).toBeNull();
+    expect(screen.getByText('Fight Club (1999)')).toBeOnTheScreen();
+
+    act(() => seenSubscriptions[1].onStatus({ seen: true }));
+    expect(screen.getByText('No movies match this filter.')).toBeOnTheScreen();
+
+    fireEvent.press(screen.getByRole('button', { name: 'All' }));
+    expect(screen.getByText('The Matrix (1999)')).toBeOnTheScreen();
+    expect(screen.getByText('Fight Club (1999)')).toBeOnTheScreen();
+  });
+
   it('reflects rating creation, updates, and removal in the movie list', () => {
     render(<GroupMoviesScreen groupId="group-1" groupName="Weekend Watch" userId="viewer" onBack={jest.fn()} onAddMovie={jest.fn()} onSelect={jest.fn()} />);
     expect(screen.getByText('Weekend Watch')).toBeOnTheScreen();
@@ -416,11 +443,17 @@ describe('GroupMoviesScreen realtime rating aggregates', () => {
     act(() => moviesSubscriptions[0].onMovies([movie()]));
 
     expect(seenSubscriptions[0]).toMatchObject({ userId: 'viewer', groupMovieId: 'tmdb_603' });
+    fireEvent.press(screen.getByRole('button', { name: 'Seen' }));
+    expect(screen.getByText('No movies match this filter.')).toBeOnTheScreen();
+    fireEvent.press(screen.getByRole('button', { name: 'Unseen' }));
     await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'Mark as seen' })); });
     expect(setMovieSeenStatus).toHaveBeenCalledWith('group-1', 'tmdb_603', true);
+    expect(screen.getByText('No movies match this filter.')).toBeOnTheScreen();
+    fireEvent.press(screen.getByRole('button', { name: 'Seen' }));
     expect(onSelect).not.toHaveBeenCalled();
     expect(await screen.findByRole('button', { name: 'Mark as unseen' })).toBeOnTheScreen();
     await act(async () => { fireEvent.press(screen.getByRole('button', { name: 'Mark as unseen' })); });
     expect(setMovieSeenStatus).toHaveBeenLastCalledWith('group-1', 'tmdb_603', false);
+    expect(screen.getByText('No movies match this filter.')).toBeOnTheScreen();
   });
 });

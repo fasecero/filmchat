@@ -386,7 +386,7 @@ Do not ingest full cast, streaming availability, trailers, genres, or a local fu
 - A member searches, recommends, sees the card in chat and one item in Movies, then another member recommends it again and sees count/history update.
 - A member records a rating, review, and watched-on medium; changes them, then removes the watch note; the aggregate is correct.
 - Invalid invite and movie-search failure show recoverable states.
-
+  
 Run the core emulator integration suite in CI. Run E2E on at least one Android emulator before each MVP release; add iOS simulator coverage when the build pipeline is available.
 
 ## 14. Implementation phases

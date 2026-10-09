@@ -6,6 +6,7 @@ import { getWatchNoteCount, type GroupMovie, subscribeToGroupMovies } from '../.
 import { setMovieSeenStatus, subscribeToMovieSeenStatus } from '../../services/movieSeenStatus';
 
 type SortMode = 'rating' | 'date' | 'watchNotes';
+type SeenFilter = 'all' | 'unseen' | 'seen';
 
 export function GroupMoviesScreen({ groupId, groupName, userId, onBack, onAddMovie, onSelect }: { groupId: string; groupName: string; userId: string; onBack: () => void; onAddMovie: () => void; onSelect: (movie: GroupMovie) => void }) {
   const { t } = useLocale();
@@ -17,6 +18,7 @@ export function GroupMoviesScreen({ groupId, groupName, userId, onBack, onAddMov
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>('rating');
+  const [seenFilter, setSeenFilter] = useState<SeenFilter>('all');
 
   useEffect(() => {
     const unsubscribe = subscribeToGroupMovies(
@@ -89,16 +91,37 @@ export function GroupMoviesScreen({ groupId, groupName, userId, onBack, onAddMov
   }, [movies, sortMode, watchNoteCounts]);
 
   const sortLabel = sortMode === 'rating' ? t('sortRating') : sortMode === 'date' ? t('sortDateAdded') : t('sortWatchNotes');
+  const visibleMovies = useMemo(() => sortedMovies.filter((movie) => {
+    const seen = seenByMovie[movie.id] ?? false;
+    return seenFilter === 'all' || (seenFilter === 'seen' ? seen : !seen);
+  }), [sortedMovies, seenByMovie, seenFilter]);
 
   return <View style={styles.container}>
     <View style={styles.header}><Pressable onPress={onBack}><Text style={styles.action}>{t('chat')}</Text></Pressable><View style={styles.headerTitle}><Text style={styles.title}>{groupName}</Text><Text style={styles.subtitle}>{t('movies')}</Text></View><Pressable onPress={onAddMovie}><Text style={styles.action}>{t('addMovie')}</Text></Pressable></View>
+    <View style={styles.filterRow}>
+      {([
+        { value: 'all', label: t('filterAll') },
+        { value: 'unseen', label: t('filterUnseen') },
+        { value: 'seen', label: t('filterSeen') },
+      ] as const).map(({ value, label }) => (
+        <Pressable
+          key={value}
+          accessibilityRole="button"
+          accessibilityState={{ selected: seenFilter === value }}
+          onPress={() => setSeenFilter(value)}
+          style={[styles.filterButton, seenFilter === value && styles.filterButtonSelected]}
+        >
+          <Text style={[styles.filterText, seenFilter === value && styles.filterTextSelected]}>{label}</Text>
+        </Pressable>
+      ))}
+    </View>
     <View style={styles.sortRow}><Pressable onPress={cycleSort} style={styles.sortButton}><Text style={styles.sortText}>{`${t('sortBy')}: ${sortLabel}`}</Text></Pressable></View>
     {seenError ? <Text style={styles.statusError}>{seenError}</Text> : null}
     {loading ? <ActivityIndicator /> : error ? <Text style={styles.status}>{error}</Text> : <FlatList
-      data={sortedMovies}
+      data={visibleMovies}
       keyExtractor={(movie) => movie.id}
-      contentContainerStyle={sortedMovies.length === 0 ? styles.emptyList : styles.list}
-      ListEmptyComponent={<Text style={styles.status}>{t('noMoviesYet')}</Text>}
+      contentContainerStyle={visibleMovies.length === 0 ? styles.emptyList : styles.list}
+      ListEmptyComponent={<Text style={styles.status}>{movies.length === 0 ? t('noMoviesYet') : t('noMoviesMatchFilter')}</Text>}
       renderItem={({ item }) => <View style={styles.row}>
         <Pressable accessibilityRole="button" onPress={() => onSelect(item)} style={styles.movieRowContent}>
           {item.posterPath ? <Image source={{ uri: `https://image.tmdb.org/t/p/w185${item.posterPath}` }} style={styles.poster} /> : <View style={styles.posterFallback}><Text style={styles.posterFallbackText}>Film</Text></View>}
@@ -127,6 +150,11 @@ const styles = StyleSheet.create({
   title: { color: '#17313B', fontSize: 22, fontWeight: '800', textAlign: 'center' },
   subtitle: { color: '#52656B', fontSize: 12, fontWeight: '700', marginTop: 2 },
   action: { color: '#C05640', fontWeight: '800', padding: 10 },
+  filterRow: { backgroundColor: '#E7E2D7', borderRadius: 12, flexDirection: 'row', gap: 4, marginBottom: 10, padding: 4 },
+  filterButton: { alignItems: 'center', borderRadius: 9, flex: 1, justifyContent: 'center', minHeight: 38, paddingHorizontal: 8 },
+  filterButtonSelected: { backgroundColor: '#28705C' },
+  filterText: { color: '#52656B', fontSize: 13, fontWeight: '700' },
+  filterTextSelected: { color: '#FFFFFF' },
   sortRow: { marginBottom: 12 },
   sortButton: { alignSelf: 'flex-start', backgroundColor: '#FFFFFF', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 },
   sortText: { color: '#17313B', fontWeight: '700' },

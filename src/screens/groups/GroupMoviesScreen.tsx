@@ -8,7 +8,7 @@ import { setMovieSeenStatus, subscribeToMovieSeenStatus } from '../../services/m
 type SortMode = 'rating' | 'date' | 'watchNotes';
 type SeenFilter = 'all' | 'unseen' | 'seen';
 
-export function GroupMoviesScreen({ groupId, groupName, userId, onBack, onBackToGroups = () => undefined, onAddMovie, onSelect }: { groupId: string; groupName: string; userId: string; onBack: () => void; onBackToGroups?: () => void; onAddMovie: () => void; onSelect: (movie: GroupMovie) => void }) {
+export function GroupMoviesScreen({ groupId, groupName, userId, onBack, onBackToGroups = onBack, onOpenProperties, onAddMovie, onSelect }: { groupId: string; groupName: string; userId: string; onBack: () => void; onBackToGroups?: () => void; onOpenProperties?: () => void; onAddMovie: () => void; onSelect: (movie: GroupMovie) => void }) {
   const { t } = useLocale();
   const [movies, setMovies] = useState<GroupMovie[]>([]);
   const [watchNoteCounts, setWatchNoteCounts] = useState<Record<string, number>>({});
@@ -98,7 +98,7 @@ export function GroupMoviesScreen({ groupId, groupName, userId, onBack, onBackTo
 
   return <View style={styles.container}>
     <Pressable accessibilityRole="button" onPress={onBackToGroups} style={styles.backToGroups}><Text style={styles.backToGroupsText}>‹ {t('yourGroups')}</Text></Pressable>
-    <View style={styles.header}><Pressable onPress={onBack}><Text style={styles.action}>{t('chat')}</Text></Pressable><View style={styles.headerTitle}><Text style={styles.title}>{groupName}</Text><Text style={styles.subtitle}>{t('movies')}</Text></View><Pressable onPress={onAddMovie}><Text style={styles.action}>{t('addMovie')}</Text></Pressable></View>
+    <View style={styles.header}><Pressable onPress={onBack}><Text style={styles.action}>{t('chat')}</Text></Pressable><View style={styles.headerTitle}><Pressable accessibilityRole="button" accessibilityLabel={t('groupProperties')} onPress={onOpenProperties}><Text numberOfLines={2} ellipsizeMode="tail" style={styles.title}>{groupName}</Text></Pressable><Text style={styles.subtitle}>{t('movies')}</Text></View><Pressable onPress={onAddMovie}><Text style={styles.action}>{t('addMovie')}</Text></Pressable></View>
     <View style={styles.filterRow}>
       {([
         { value: 'all', label: t('filterAll') },
@@ -147,8 +147,8 @@ export function GroupMoviesScreen({ groupId, groupName, userId, onBack, onBackTo
 const styles = StyleSheet.create({
   container: { backgroundColor: '#F5F1E8', flex: 1, padding: 16 },
   header: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingBottom: 8 },
-  headerTitle: { alignItems: 'center', flex: 1, paddingHorizontal: 8 },
-  title: { color: '#17313B', fontSize: 22, fontWeight: '800', textAlign: 'center' },
+  headerTitle: { alignItems: 'center', flex: 1, minWidth: 0, paddingHorizontal: 8 },
+  title: { color: '#17313B', fontSize: 22, fontWeight: '800', textAlign: 'center', width: '100%' },
   subtitle: { color: '#52656B', fontSize: 12, fontWeight: '700', marginTop: 2 },
   action: { color: '#C05640', fontWeight: '800', padding: 10 },
   backToGroups: { alignSelf: 'flex-start', marginBottom: 8, paddingHorizontal: 6, paddingVertical: 4 },

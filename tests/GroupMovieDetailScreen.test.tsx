@@ -234,6 +234,31 @@ describe('GroupDetailScreen default section', () => {
 
     expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
   });
+
+  it('keeps a chat recommendation when deleting its movie is blocked by another member note', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    jest.mocked(deleteMovieRecommendation).mockResolvedValue({
+      groupId: 'group-1', messageId: 'movie-message', deleted: false, movieRemoved: false, blockedByOtherWatchNotes: true,
+    });
+    const recommendation: Message = {
+      id: 'movie-message', type: 'movie_recommendation', authorId: 'viewer', authorDisplayNameSnapshot: 'Viewer',
+      text: null, createdAt: null, clientRequestId: 'request-1',
+      movie: { provider: 'tmdb', externalMovieId: '603', title: 'The Matrix', releaseYear: 1999, posterPath: null, overview: null },
+      groupMovieId: 'tmdb_603',
+    };
+    render(<GroupDetailScreen group={{ id: 'group-1', name: 'Weekend Watch', ownerId: 'viewer' }} userId="viewer" displayName="Viewer" onBack={jest.fn()} onLeft={jest.fn()} />);
+    await finishInitialLoad();
+    fireEvent.press(screen.getByText('Chat'));
+    act(() => messageSubscriptions[0].onMessages([recommendation]));
+    fireEvent.press(screen.getByRole('button', { name: 'Delete' }));
+    const actions = alert.mock.calls[0][2] as { style?: string; onPress?: () => void }[];
+
+    await act(async () => { actions.find((action) => action.style === 'destructive')?.onPress?.(); await Promise.resolve(); });
+
+    expect(screen.getByText('The Matrix (1999)')).toBeOnTheScreen();
+    expect(screen.getByText('This movie cannot be removed because another member has a watch note. Their note must be removed first.')).toBeOnTheScreen();
+    alert.mockRestore();
+  });
 });
 
 describe('GroupMovieDetailScreen realtime watch notes', () => {
@@ -278,6 +303,30 @@ describe('GroupMovieDetailScreen realtime watch notes', () => {
     const actions = alert.mock.calls[0][2] as { style?: string; onPress?: () => void }[];
     await act(async () => { actions.find((action) => action.style === 'destructive')?.onPress?.(); await Promise.resolve(); });
     expect(onBack).toHaveBeenCalledTimes(1);
+    alert.mockRestore();
+  });
+
+  it('keeps the recommendation history when another member note blocks final movie deletion', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    jest.mocked(loadRecommendationHistory).mockResolvedValue([{
+      id: 'last-message', messageId: 'last-message', authorId: 'viewer', authorDisplayNameSnapshot: 'Viewer', note: 'My recommendation', createdAt: null,
+    }]);
+    jest.mocked(deleteMovieRecommendation).mockResolvedValue({
+      groupId: 'group-1', messageId: 'last-message', deleted: false, movieRemoved: false, blockedByOtherWatchNotes: true,
+    });
+    render(<GroupMovieDetailScreen groupId="group-1" groupMovieId="tmdb_603" userId="viewer" onBack={jest.fn()} />);
+    await finishInitialLoad();
+    act(() => {
+      movieSubscriptions[0].onMovie(movie());
+      noteSubscriptions[0].onNotes([watchNote('another-member', 4, 'Keep this movie on the list')]);
+    });
+    fireEvent.press(screen.getByRole('button', { name: 'Delete' }));
+    const actions = alert.mock.calls[0][2] as { style?: string; onPress?: () => void }[];
+
+    await act(async () => { actions.find((action) => action.style === 'destructive')?.onPress?.(); await Promise.resolve(); });
+
+    expect(screen.getByText('My recommendation')).toBeOnTheScreen();
+    expect(screen.getByText('This movie cannot be removed because another member has a watch note. Their note must be removed first.')).toBeOnTheScreen();
     alert.mockRestore();
   });
 

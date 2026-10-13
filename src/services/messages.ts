@@ -163,7 +163,7 @@ export const sendTextMessage = async (
 export const deleteMovieRecommendation = async (groupId: string, messageId: string) => {
   const callable = httpsCallable<
     { groupId: string; messageId: string },
-    { groupId: string; messageId: string; deleted: boolean; movieRemoved: boolean }
+    { groupId: string; messageId: string; deleted: boolean; movieRemoved: boolean; blockedByOtherWatchNotes?: boolean }
   >(functions, 'deleteMovieRecommendation');
   const response = await callable({ groupId, messageId });
   return response.data;

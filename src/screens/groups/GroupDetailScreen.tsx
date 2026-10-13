@@ -170,7 +170,12 @@ export function GroupDetailScreen({ group, userId, displayName, onBack, onBackTo
       { text: t('deleteRecommendation'), style: 'destructive', onPress: () => {
         setDeletingRecommendationId(message.id);
         void deleteMovieRecommendation(group.id, message.id)
-          .then(() => {
+          .then((result) => {
+            if (result.blockedByOtherWatchNotes) {
+              setError(t('deleteMovieBlockedByNotes'));
+              return;
+            }
+            if (!result.deleted) return;
             setMessages((current) => current.filter((item) => item.id !== message.id));
             setPending((current) => { const next = { ...current }; delete next[message.id]; return next; });
           })

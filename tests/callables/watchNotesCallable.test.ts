@@ -423,14 +423,32 @@ describe('deleteMovieRecommendation callable', () => {
     expect((await firestore.doc(`users/${otherAuthorId}/receivedRecommendations/${firstMessageId}`).get()).exists).toBe(false);
   });
 
-  it('removes the group movie and nested watch notes when the last recommendation is deleted', async () => {
+  it('blocks deleting the last recommendation when another member has a watch note', async () => {
     await secondMessageRef.delete();
     await historyCollection.doc(secondMessageId).delete();
     await movieRef.update({ recommendationCount: 1, recommenderIds: [authorId] });
 
+    await expect(callDelete(firstMessageId)).resolves.toMatchObject({
+      deleted: false,
+      movieRemoved: false,
+      blockedByOtherWatchNotes: true,
+    });
+    expect((await movieRef.get()).exists).toBe(true);
+    expect((await watchNotesCollection.doc('note-owner').get()).exists).toBe(true);
+    expect((await firstMessageRef.get()).exists).toBe(true);
+    expect((await historyCollection.doc(firstMessageId).get()).exists).toBe(true);
+  });
+
+  it("removes the movie with the author's own watch note when deleting the last recommendation", async () => {
+    await secondMessageRef.delete();
+    await historyCollection.doc(secondMessageId).delete();
+    await movieRef.update({ recommendationCount: 1, recommenderIds: [authorId] });
+    await watchNotesCollection.doc('note-owner').delete();
+    await watchNotesCollection.doc(authorId).set({ userId: authorId, rating: 5, reviewText: 'My note' });
+
     await expect(callDelete(firstMessageId)).resolves.toMatchObject({ deleted: true, movieRemoved: true });
     expect((await movieRef.get()).exists).toBe(false);
-    expect((await watchNotesCollection.doc('note-owner').get()).exists).toBe(false);
+    expect((await watchNotesCollection.doc(authorId).get()).exists).toBe(false);
     expect((await firstMessageRef.get()).exists).toBe(false);
   });
 
@@ -452,18 +470,31 @@ describe('deleteMovieRecommendation callable', () => {
     expect((await firstMessageRef.get()).exists).toBe(false);
   });
 
-  it('does not leave a watch note orphaned when its save races with deleting the last recommendation', async () => {
+  it('preserves another member note if its save races with deleting the last recommendation', async () => {
     await secondMessageRef.delete();
     await historyCollection.doc(secondMessageId).delete();
     await movieRef.update({ recommendationCount: 1, recommenderIds: [authorId] });
+    await watchNotesCollection.doc('note-owner').delete();
 
-    await Promise.allSettled([
+    const [deleteResult, saveResult] = await Promise.allSettled([
       callDelete(firstMessageId),
       callSaveWatchNote({ groupId: deletionGroupId, groupMovieId, rating: null, reviewText: 'Concurrent note', watchedOn: '' }),
     ]);
 
-    expect((await movieRef.get()).exists).toBe(false);
-    expect((await watchNotesCollection.doc(userId).get()).exists).toBe(false);
-    expect((await firstMessageRef.get()).exists).toBe(false);
+    const movieStillExists = (await movieRef.get()).exists;
+    const noteStillExists = (await watchNotesCollection.doc(userId).get()).exists;
+    const recommendationStillExists = (await firstMessageRef.get()).exists;
+    if (movieStillExists) {
+      expect(noteStillExists).toBe(true);
+      expect(recommendationStillExists).toBe(true);
+      expect(deleteResult.status).toBe('fulfilled');
+      if (deleteResult.status === 'fulfilled') expect(deleteResult.value.blockedByOtherWatchNotes).toBe(true);
+      expect(saveResult.status).toBe('fulfilled');
+    } else {
+      expect(noteStillExists).toBe(false);
+      expect(recommendationStillExists).toBe(false);
+      expect(saveResult.status).toBe('rejected');
+      expect(deleteResult.status).toBe('fulfilled');
+    }
   });
 });

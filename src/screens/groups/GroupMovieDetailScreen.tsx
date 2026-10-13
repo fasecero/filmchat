@@ -135,6 +135,11 @@ export function GroupMovieDetailScreen({ groupId, groupMovieId, userId, onBack }
         setDeleteError(null);
         void deleteMovieRecommendation(groupId, item.messageId)
           .then((result) => {
+            if (result.blockedByOtherWatchNotes) {
+              setDeleteError(t('deleteMovieBlockedByNotes'));
+              return;
+            }
+            if (!result.deleted) return;
             if (result.movieRemoved) {
               onBack();
               return;

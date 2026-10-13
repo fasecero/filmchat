@@ -499,6 +499,9 @@ export const deleteMovieRecommendation = onCall(async (request) => {
 			movieRemoved ? transaction.get(groupMovieRef.collection('watchNotes')) : Promise.resolve(null),
 			inboxCandidates.length > 0 ? transaction.getAll(...inboxCandidates) : Promise.resolve([]),
 		]);
+		if (movieRemoved && watchNotesSnapshot?.docs.some((watchNote) => watchNote.id !== uid)) {
+			return { groupId, messageId, deleted: false, movieRemoved: false, blockedByOtherWatchNotes: true };
+		}
 		const inboxRefs = inboxSnapshots
 			.filter((inboxSnapshot) => inboxSnapshot.exists && inboxSnapshot.data()?.groupId === groupId)
 			.map((inboxSnapshot) => inboxSnapshot.ref);
